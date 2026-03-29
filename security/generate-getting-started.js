@@ -264,7 +264,7 @@ const doc = new Document({
         spacer(80),
         calloutBox(
           "WHY CAUTION IS WARRANTED",
-          "The core server runtime (@paperclipai/server, 11MB) has no public source code. The npm package installs a persistent background server and database. The GitHub organization is less than 5 weeks old. A full security analysis is available in the companion document. This guide focuses on how to run it safely despite these concerns.",
+          "The npm package installs a persistent background server and database. The GitHub organization is less than 5 weeks old with rapid star growth. The supply chain includes 20+ dependencies. A full security analysis (including source audit) is available in the companion document. This guide focuses on how to run it safely despite these concerns.",
           "FCE4EC",
           RED,
         ),

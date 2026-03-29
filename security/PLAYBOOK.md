@@ -18,19 +18,33 @@ How to safely evaluate and run `paperclipai/companies.sh` without trusting it.
 | Risk | Severity | Detail |
 |------|----------|--------|
 | Persistent background server | HIGH | Detached Node.js server on :3100 survives after the CLI exits |
-| Unauditable core | HIGH | `@paperclipai/server` (11MB compiled JS) has no public source |
-| Supply chain surface | HIGH | 20+ deps including `@aws-sdk/client-s3`, `embedded-postgres`, `open`, `sharp`, `chokidar` |
+| Supply chain surface | MEDIUM | 20+ deps including `@aws-sdk/client-s3`, `embedded-postgres`, `sharp`, `chokidar` |
 | Suspicious social proof | MEDIUM | Entire org is < 5 weeks old, 38k stars in 27 days, single maintainer (`cryppadotta`, protonmail) |
 | Telemetry without consent | MEDIUM | Opt-out-by-env-var, not opt-in. UUID written to disk regardless |
 | Agent filesystem access | MEDIUM | Agents get `$AGENT_HOME` with read/write; `chokidar` watches broadly |
 | Template injection | MEDIUM | Community PRs to the template registry could inject malicious agent configs |
 
-### What's not terrible
+### Corrected findings (source audit 2026-03-29)
 
+The original report claimed `@paperclipai/server` was closed-source. **This was incorrect.**
+The full TypeScript source is at https://github.com/paperclipai/paperclip/tree/master/server/src (MIT license).
+
+Source audit corrections:
+- **S3**: Optional storage backend, defaults to `local_disk`. S3 is only used when explicitly configured. Not an exfiltration vector in default config.
+- **Dynamic import (`new Function`)**: The compiled npm package uses `new Function("specifier", "return import(specifier)")` as a CJS-to-ESM bridge. In the TypeScript source, these are standard `await import()` calls for loading plugin manifests and the embedded-postgres module. Not arbitrary code execution.
+- **Generic `fetch(url)`**: The server fetch calls are for (1) GitHub API to download company templates, (2) OpenAI/Anthropic API credential validation, (3) plugin HTTP with full SSRF protection (protocol whitelist, DNS resolution, private IP blocking, DNS-rebind prevention). Well-implemented security model.
+- **`spawn("open", [url])`**: Located in `cli/src/client/board-auth.ts` — opens the dashboard URL in your browser for authentication. Standard UX pattern, not in the server.
+- **`server.unref()`**: Used in port-availability checks and test cleanup. The persistent server concern is real but comes from the CLI layer (`companies.sh`), not the server source itself.
+
+### Positive findings
+
+- Full source is public, MIT-licensed, and auditable
 - The CLI layer has clean, readable TypeScript
 - Telemetry respects `DO_NOT_TRACK=1` and `CI=true`
 - npm publishing uses GitHub Actions OIDC (not personal tokens)
-- Agent instructions include "never exfiltrate" clauses (but these are prompts, not access controls)
+- Plugin HTTP fetch has proper SSRF protection (DNS pinning, private IP blocking, protocol whitelist)
+- Local disk storage has path traversal prevention (`resolveWithin` with `..` rejection)
+- Agent instructions include "never exfiltrate" clauses (prompts, not access controls — but defense in depth)
 
 ---
 
