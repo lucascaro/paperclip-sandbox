@@ -9,7 +9,5 @@
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "dependencies": {
-    "docx": "9.6.1"
-  }
+  "dependencies": {}
 }
