@@ -41,8 +41,10 @@ Paperclip is an AI agent orchestration platform. It lets you create virtual "com
 
 ### Step 1: Clone the sandbox repository
 
+From the GitHub page for this repository, click the green **Code** button, copy the HTTPS clone URL, and substitute it below.
+
 ```bash
-git clone <repo-url> paperclip-sandbox
+git clone REPO_URL_FROM_GITHUB paperclip-sandbox
 cd paperclip-sandbox
 ```
 
@@ -228,7 +230,8 @@ To monitor resource usage and network connections:
 - `.env` — your scoped API keys (gitignored, never committed)
 - `data/` — all Paperclip data: database, agent workspaces, backups (gitignored)
 - `docker/` — container configuration and compose files
-- `security/PLAYBOOK.md` — full security analysis and trust gate details
+- `security/PLAYBOOK.md` — security playbook: trust gates, operational guardrails, and runbooks
+- `security/SECURITY-ANALYSIS.md` — detailed security analysis report and threat model
 
 ---
 
