@@ -300,7 +300,7 @@ const doc = new Document({
         new Paragraph({
           alignment: AlignmentType.CENTER,
           spacing: { after: 80 },
-          children: [new TextRun({ text: "npm package: @paperclipai/server (11MB, closed source)", size: 22, font: "Arial", color: "666666" })],
+          children: [new TextRun({ text: "npm package: @paperclipai/server (11MB, open source — MIT)", size: 22, font: "Arial", color: "666666" })],
         }),
         spacer(600),
         new Paragraph({
@@ -316,7 +316,7 @@ const doc = new Document({
         spacer(1200),
         calloutBox(
           "OVERALL ASSESSMENT: PROCEED WITH EXTREME CAUTION",
-          "This package installs a persistent background server, a local database, and has unauditable closed-source components. Static analysis found no direct credential theft, but dynamic import capabilities and S3 upload infrastructure mean runtime behavior cannot be fully predicted from code alone. Docker isolation and network monitoring are required before any execution.",
+          "This package installs a persistent background server and a local database. The source code is fully public (MIT license). A source audit confirmed that S3 is an optional storage backend (local disk is default), dynamic imports are standard module loading, and plugin HTTP has SSRF protection. The persistent background server and young organization remain the primary concerns. Docker isolation is still recommended for initial evaluation.",
           "FCE4EC",
           RED_HIGH,
         ),
@@ -362,7 +362,7 @@ const doc = new Document({
         heading3("Key Findings"),
         bulletRuns([bold("No direct credential theft detected"), normal(" \u2014 no reads of ~/.ssh, ~/.aws, ~/.gnupg, or keychain paths in either package")]),
         bulletRuns([bold("Persistent background server"), normal(" \u2014 the package silently starts a detached Node.js server on port 3100 that survives after the CLI exits")]),
-        bulletRuns([bold("Closed-source core"), normal(" \u2014 @paperclipai/server (11MB, 744 files) has no public source code; runtime behavior is unauditable")]),
+        bulletRuns([bold("Open-source server"), normal(" \u2014 @paperclipai/server source is public (MIT) at github.com/paperclipai/paperclip. Source audit verified S3 is optional, fetch has SSRF protection, and dynamic imports are standard module loading.")]),
         bulletRuns([bold("Dynamic code loading"), normal(" \u2014 new Function() constructor enables arbitrary module imports at runtime, defeating static analysis")]),
         bulletRuns([bold("S3 upload infrastructure"), normal(" \u2014 full AWS S3 client with a default bucket named \"paperclip\"; data exfiltration capability exists")]),
         bulletRuns([bold("Young organization"), normal(" \u2014 the entire paperclipai GitHub org is < 5 weeks old with 38,000 stars in 27 days from a single maintainer")]),
@@ -417,15 +417,15 @@ const doc = new Document({
           rows: [
             riskRow("Risk", "Severity", "Detail", true),
             riskRow("Persistent background server", "HIGH", "Running npx companies.sh add silently starts a detached Node.js server on port 3100 (detached: true, child.unref()). It survives after the CLI exits. No explicit \"install a server\" prompt is shown."),
-            riskRow("Unauditable server core", "HIGH", "@paperclipai/server (11MB compiled JS) has no public source. You cannot verify what it does at runtime."),
+            riskRow("Young organization", "MEDIUM", "Entire org created 2026-02-27. 38k stars in 27 days, single maintainer. Source is public and auditable, but project maturity is low."),
             riskRow("Supply chain attack surface", "HIGH", "20+ dependencies including @aws-sdk/client-s3 (S3 uploads), embedded-postgres (database), open (browser launch), sharp (native binary), chokidar (filesystem watcher)."),
-            riskRow("Dynamic code loading", "HIGH", "new Function(\"specifier\", \"return import(specifier)\") in paperclipai enables loading arbitrary modules at runtime, defeating static analysis."),
-            riskRow("S3 upload capability", "HIGH", "Full S3 configuration with default bucket named \"paperclip\". Infrastructure for data exfiltration exists even if not currently active."),
-            riskRow("Suspicious social proof", "MEDIUM", "Entire org created 2026-02-27. Main repo: 38k stars in 27 days, single maintainer (cryppadotta, protonmail). Star inflation at this velocity is a known social engineering pattern."),
+            riskRow("Dynamic imports (CORRECTED)", "LOW", "The new Function() in compiled npm package is a CJS-to-ESM bridge. Source shows standard await import() for plugin manifests and embedded-postgres. Not arbitrary code execution."),
+            riskRow("S3 storage (CORRECTED)", "LOW", "S3 is an optional storage backend; default is local_disk. Only activated when explicitly configured by the user. Not an exfiltration vector in default configuration."),
+            riskRow("Suspicious social proof", "MEDIUM", "Entire org created 2026-02-27. Main repo: 38k stars in 27 days, single maintainer (cryppadotta, protonmail). Source is public but project maturity is low."),
             riskRow("Telemetry without consent", "MEDIUM", "Writes UUID to ~/.config/companies.sh/telemetry.json and POSTs to AWS Lambda on first run. Opt-out via env var, not opt-in."),
-            riskRow("Agent filesystem access", "MEDIUM", "Agents get $AGENT_HOME with read/write. chokidar watches broadly. Scope depends on unauditable server sandbox."),
+            riskRow("Agent filesystem access", "MEDIUM", "Agents get $AGENT_HOME with read/write. Local disk storage has path traversal prevention (resolveWithin with .. rejection). chokidar watches broadly."),
             riskRow("Template injection risk", "MEDIUM", "Community PRs to the template registry (46 forks, 6 open issues) could inject malicious agent configurations."),
-            riskRow("Generic fetch(url)", "MEDIUM", "paperclipai contains fetch() calls with variable URLs \u2014 destinations determined at runtime, not just hardcoded API endpoints."),
+            riskRow("Plugin HTTP fetch (CORRECTED)", "LOW", "Plugin fetch has full SSRF protection: protocol whitelist (http/https only), DNS resolution with private IP blocking, and DNS-pinning to prevent rebinding attacks. Well-implemented."),
           ],
         }),
 
@@ -464,19 +464,19 @@ const doc = new Document({
           rows: [
             scanRow("Finding", "Verdict", true),
             scanRow("Sensitive path access (.ssh, .aws, .gnupg, keychain)", "CLEAN \u2014 none found"),
-            scanRow("eval() / Function() constructor", "CONCERN \u2014 new Function(\"specifier\", \"return import(specifier)\") enables dynamic imports"),
-            scanRow("Network requests", "MIXED \u2014 api.anthropic.com and api.openai.com (expected), plus generic fetch(url) with variable destinations"),
+            scanRow("eval() / Function() constructor", "EXPLAINED \u2014 CJS-to-ESM bridge in compiled output. Source uses standard await import() for plugin manifests."),
+            scanRow("Network requests", "VERIFIED \u2014 api.anthropic.com/api.openai.com (credential checks), GitHub API (template downloads), plugin fetch with SSRF protection"),
             scanRow("Environment variable access", "HEAVY \u2014 20+ env vars including DATABASE_URL, auth secrets, master encryption keys"),
             scanRow("Filesystem writes", "EXTENSIVE \u2014 ~15 mkdirSync/writeFileSync calls; writes to PAPERCLIP_HOME, creates dirs and config files"),
             scanRow("Detached/background processes", "CONFIRMED \u2014 spawn with detached: true and child.unref(); server.unref() keeps server alive"),
-            scanRow("S3/cloud upload capability", "CONFIRMED \u2014 full S3 config schema, bucket setup (default: \"paperclip\"), region config, @aws-sdk/client-s3"),
+            scanRow("S3/cloud upload capability", "OPTIONAL \u2014 S3 is an alternative storage backend, default is local_disk. Only used when explicitly configured by the user."),
             scanRow("Database installation", "CONFIRMED \u2014 embedded-postgres installs and runs a local PostgreSQL instance"),
           ],
         }),
 
         spacer(200),
-        heading3("What the Scan Cannot Tell You"),
-        para("The presence of new Function() for dynamic imports means the package can load and execute arbitrary code at runtime that is not visible in the static scan. The generic fetch(url) calls with variable URLs mean network destinations are determined at runtime. Full behavioral analysis requires monitored execution (see Section 5, Gates 1\u20132)."),
+        heading3("Source Audit Clarifications"),
+        para("A source audit of the TypeScript code (github.com/paperclipai/paperclip/tree/master/server/src) resolved several concerns from the static scan of compiled artifacts. The new Function() pattern is a standard CJS-to-ESM bridge, not arbitrary code execution. The generic fetch() calls are for GitHub API access and plugin HTTP with SSRF protection (protocol whitelist, DNS pinning, private IP blocking). S3 is a user-configured optional storage backend. Docker isolation is still recommended for initial evaluation due to the persistent background server and the project's young age."),
 
         // --- 5. Mitigation Plan ---
         new Paragraph({ children: [new PageBreak()] }),
@@ -556,7 +556,7 @@ const doc = new Document({
         spacer(100),
         calloutBox(
           "Important Caveat",
-          "Agent instruction clauses like \"never exfiltrate secrets\" are LLM prompts, not access controls. They can be overridden by prompt injection or ignored by the underlying tool framework. The actual security boundary is what the server code permits, and that code is closed-source.",
+          "Agent instruction clauses like \"never exfiltrate secrets\" are LLM prompts, not access controls. However, the server code (now auditable) implements real security boundaries: SSRF protection on plugin HTTP, path traversal prevention on local storage, and protocol whitelisting.",
           "FFF3CD",
           "FFCC02",
         ),
@@ -568,7 +568,7 @@ const doc = new Document({
         para("The paperclipai/companies.sh ecosystem presents a mixed security profile:"),
         spacer(60),
         bulletRuns([bold("No smoking gun: "), normal("Static analysis found no direct reads of sensitive credentials, SSH keys, or browser data.")]),
-        bulletRuns([bold("Cannot be fully cleared: "), normal("Dynamic code loading (new Function), generic fetch with variable URLs, and a closed-source 11MB server core mean runtime behavior is unpredictable from static analysis alone.")]),
+        bulletRuns([bold("Source audit resolved key concerns: "), normal("S3 is optional (default: local disk), dynamic imports are standard module loading, and plugin HTTP has proper SSRF protection with DNS pinning.")]),
         bulletRuns([bold("Unusual trust signals: "), normal("A 5-week-old organization with 38k GitHub stars and a single anonymous maintainer warrants skepticism about the social proof.")]),
         spacer(100),
         para([

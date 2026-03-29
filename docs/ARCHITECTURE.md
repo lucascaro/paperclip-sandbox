@@ -8,7 +8,7 @@ Paperclip is a three-layer system:
 
 1. **companies.sh** — thin CLI that fetches company templates from GitHub
 2. **paperclipai** — Node.js server with embedded PostgreSQL, serves on port 3100
-3. **@paperclipai/server** — closed-source runtime (744 files, 11MB) that executes agents
+3. **@paperclipai/server** — open-source runtime (MIT license, TypeScript source at github.com/paperclipai/paperclip/tree/master/server/src) that executes agents
 
 ## Data Layout
 
