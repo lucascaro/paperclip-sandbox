@@ -1,0 +1,6 @@
+# Override: run with NO network access (Gate 1)
+# Usage: docker compose -f docker-compose.yml -f docker-compose.isolated.yml up --build
+services:
+  paperclip:
+    network_mode: "none"
+    ports: !override []

@@ -1,0 +1,28 @@
+# Override: route all traffic through mitmproxy sidecar (Gate 2)
+# Usage: docker compose -f docker-compose.yml -f docker-compose.proxy.yml up --build
+#
+# After running, inspect traffic at http://localhost:8081
+services:
+  paperclip:
+    depends_on:
+      - mitmproxy
+    environment:
+      - HTTP_PROXY=http://mitmproxy:8080
+      - HTTPS_PROXY=http://mitmproxy:8080
+      - NODE_TLS_REJECT_UNAUTHORIZED=0
+    networks:
+      - sandboxnet
+
+  mitmproxy:
+    image: mitmproxy/mitmproxy:latest
+    container_name: paperclip-mitmproxy
+    command: mitmweb --web-host 0.0.0.0 --web-port 8081 --listen-port 8080 --ssl-insecure
+    ports:
+      - "8081:8081"   # mitmproxy web UI
+    networks:
+      - sandboxnet
+    mem_limit: 256m
+
+networks:
+  sandboxnet:
+    driver: bridge

@@ -1,0 +1,17 @@
+node_modules/
+.env
+.env.*
+!.env.example
+dist/
+.DS_Store
+*.log
+
+# Paperclip data (database, workspaces, backups — all inside container bind-mount)
+data/*
+!data/.gitkeep
+
+# mitmproxy captures
+*.mitm
+
+# Static scan artifacts
+/tmp/

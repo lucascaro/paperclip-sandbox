@@ -1,0 +1,18 @@
+# Network allowlist — only these hosts are permitted for outbound connections.
+# Used by scripts/start.sh to configure iptables inside the container.
+# One host per line. Lines starting with # are comments.
+
+# LLM providers
+api.anthropic.com
+api.openai.com
+
+# npm registry (for runtime plugin installs)
+registry.npmjs.org
+
+# GitHub (for company template downloads)
+github.com
+raw.githubusercontent.com
+api.github.com
+
+# --- Optional: add additional hosts as needed per company ---
+# Add service endpoints here as your company templates require them.

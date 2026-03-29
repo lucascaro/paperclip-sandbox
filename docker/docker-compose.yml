@@ -1,0 +1,40 @@
+services:
+  paperclip:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: paperclip-sandbox
+    restart: unless-stopped
+
+    # --- Security hardening ---
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp:size=200m
+      - /app/node_modules/.cache:size=100m
+
+    # --- Resource limits ---
+    mem_limit: 1g
+    cpus: 2
+
+    # --- Network ---
+    # Default: host networking for localhost access to dashboard
+    # Override with docker-compose.isolated.yml for no-network mode
+    ports:
+      - "${PAPERCLIP_PORT:-3100}:3100"
+
+    # --- Data ---
+    volumes:
+      - ../data:/data
+
+    # --- Environment ---
+    env_file:
+      - ../.env
+    environment:
+      - PAPERCLIP_HOME=/data
+      - PAPERCLIP_PORT=3100
+      - DO_NOT_TRACK=1
+      - NODE_ENV=production
