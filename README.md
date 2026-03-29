@@ -76,5 +76,9 @@ open http://localhost:3100
 
 ## Security Report
 
-See [security/PLAYBOOK.md](security/PLAYBOOK.md) for the full analysis and
-mitigation plan. A .docx report suitable for sharing is in `security/`.
+See the [Security Analysis Report](security/SECURITY-ANALYSIS.md) for a detailed
+risk assessment, static scan results, and mitigation plan. The full threat model
+and trust gate details are in [security/PLAYBOOK.md](security/PLAYBOOK.md).
+
+A [Getting Started](security/GETTING-STARTED.md) guide is also available for
+first-time evaluators.
