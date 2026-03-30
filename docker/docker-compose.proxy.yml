@@ -1,7 +1,8 @@
 # Override: route all traffic through mitmproxy sidecar (Gate 2)
+# All traffic is allowed but visible for inspection.
 # Usage: docker compose -f docker-compose.yml -f docker-compose.proxy.yml up --build
 #
-# After running, inspect traffic at http://localhost:8081
+# Inspect traffic at http://localhost:8081 (password: p)
 services:
   paperclip:
     depends_on:
@@ -9,21 +10,62 @@ services:
     environment:
       - HTTP_PROXY=http://mitmproxy:8080
       - HTTPS_PROXY=http://mitmproxy:8080
+      - http_proxy=http://mitmproxy:8080
+      - https_proxy=http://mitmproxy:8080
+      - npm_config_proxy=http://mitmproxy:8080
+      - npm_config_https_proxy=http://mitmproxy:8080
       - NODE_TLS_REJECT_UNAUTHORIZED=0
-    ports:
-      - "${PAPERCLIP_PORT:-3100}:3100"
+      - NPM_CONFIG_PREFER_OFFLINE=1
+      - NPM_CONFIG_UPDATE_NOTIFIER=false
+      - NPM_CONFIG_STRICT_SSL=false
+      - NO_UPDATE_NOTIFIER=1
+      - GLOBAL_AGENT_HTTP_PROXY=http://mitmproxy:8080
+      - NO_PROXY=localhost,127.0.0.1,host.docker.internal,paperclip
+      - no_proxy=localhost,127.0.0.1,host.docker.internal,paperclip
+      - NODE_OPTIONS=--use-env-proxy
+    ports: !override []
     networks:
       - sandboxnet
 
   mitmproxy:
     image: mitmproxy/mitmproxy:latest
     container_name: paperclip-mitmproxy
-    command: mitmweb --web-host 0.0.0.0 --web-port 8081 --listen-port 8080 --ssl-insecure --no-web-open-browser --set web_password=p
+    command: >-
+      mitmweb
+      --web-host 0.0.0.0
+      --web-port 8081
+      --listen-port 8080
+      --ssl-insecure
+      --no-web-open-browser
+      --set web_password=p
+      --mode regular
     ports:
-      - "8081:8081"   # mitmproxy web UI
+      - "8081:8081"
     networks:
-      - sandboxnet
+      sandboxnet:
+      default:
     mem_limit: 256m
+
+  # TLS-terminating reverse proxy
+  gateway:
+    image: caddy:2-alpine
+    container_name: paperclip-gateway
+    depends_on:
+      - paperclip
+    ports:
+      - "${PAPERCLIP_PORT:-3100}:${PAPERCLIP_PORT:-3100}"
+    environment:
+      - PAPERCLIP_PORT=${PAPERCLIP_PORT:-3100}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+    networks:
+      sandboxnet:
+      default:
+    mem_limit: 64m
+
+volumes:
+  caddy_data:
 
 networks:
   sandboxnet:

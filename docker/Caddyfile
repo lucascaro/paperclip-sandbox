@@ -1,0 +1,8 @@
+{
+	auto_https disable_redirects
+}
+
+https://localhost:{$PAPERCLIP_PORT:3100} {
+	tls internal
+	reverse_proxy paperclip:3100
+}

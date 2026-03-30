@@ -1,8 +1,12 @@
 """
-mitmproxy addon: block all traffic except allowlisted hosts.
+mitmproxy addon: block all traffic except allowlisted hosts and URLs.
 
-Reads allowed hosts from /config/allowed-hosts.txt (mounted into the container).
-Any request to a non-allowlisted host gets a 403 response and is logged.
+Reads allowed entries from /config/allowed-hosts.txt (mounted into the container).
+Supports:
+  - Host-only:    api.anthropic.com           (all methods, all paths)
+  - Exact URL:    GET https://example.com/path (method + scheme + host + path must match)
+
+Any request not matching the allowlist gets a 403 response and is logged.
 """
 
 import logging
@@ -15,36 +19,59 @@ ALLOWLIST_PATH = "/config/allowed-hosts.txt"
 logger = logging.getLogger("allowlist")
 
 
-def load_allowlist(path: str) -> set[str]:
+def load_allowlist(path: str) -> tuple[set[str], list[tuple[str, str]]]:
+    """Returns (host_set, url_rules) where url_rules are (METHOD, URL) tuples."""
     hosts = set()
+    url_rules = []
     try:
         for line in Path(path).read_text().splitlines():
-            line = line.strip()
-            if line and not line.startswith("#"):
+            line = line.split("#")[0].strip()
+            if not line:
+                continue
+            # URL rule: "GET https://example.com/path"
+            if " " in line and line.split()[0].isupper():
+                parts = line.split(None, 1)
+                method = parts[0].upper()
+                url = parts[1].lower()
+                url_rules.append((method, url))
+            else:
                 hosts.add(line.lower())
     except FileNotFoundError:
         logger.error("Allowlist file not found: %s — blocking ALL traffic", path)
-    return hosts
+    return hosts, url_rules
 
 
 class AllowlistAddon:
     def __init__(self):
-        self.allowed: set[str] = set()
+        self.allowed_hosts: set[str] = set()
+        self.url_rules: list[tuple[str, str]] = []
 
     def load(self, loader):
-        self.allowed = load_allowlist(ALLOWLIST_PATH)
-        ctx.log.info(f"Allowlist loaded: {len(self.allowed)} hosts — {', '.join(sorted(self.allowed))}")
+        self.allowed_hosts, self.url_rules = load_allowlist(ALLOWLIST_PATH)
+        entries = sorted(self.allowed_hosts) + [f"{m} {u}" for m, u in self.url_rules]
+        ctx.log.info(f"Allowlist loaded: {len(entries)} rules — {', '.join(entries)}")
 
     def request(self, flow: http.HTTPFlow) -> None:
         host = flow.request.pretty_host.lower()
-        if host not in self.allowed:
-            ctx.log.warn(f"BLOCKED: {flow.request.method} {flow.request.pretty_url} (host {host} not in allowlist)")
-            flow.response = http.Response.make(
-                403,
-                f"Blocked by allowlist: {host} is not permitted.\n"
-                f"To allow this host, add it to config/allowed-hosts.txt and restart.\n",
-                {"Content-Type": "text/plain"},
-            )
+
+        # Check host-level allow
+        if host in self.allowed_hosts:
+            return
+
+        # Check URL-level rules
+        method = flow.request.method.upper()
+        url = flow.request.pretty_url.lower()
+        for rule_method, rule_url in self.url_rules:
+            if method == rule_method and url == rule_url:
+                return
+
+        ctx.log.warn(f"BLOCKED: {flow.request.method} {flow.request.pretty_url} (not in allowlist)")
+        flow.response = http.Response.make(
+            403,
+            f"Blocked by allowlist: {flow.request.method} {host} is not permitted.\n"
+            f"To allow this host, add it to config/allowed-hosts.txt and restart.\n",
+            {"Content-Type": "text/plain"},
+        )
 
 
 addons = [AllowlistAddon()]

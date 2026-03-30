@@ -5,11 +5,19 @@
 # (http://localhost:8081) and confirm they are expected.
 
 localhost
+host.docker.internal
 # npm registry (required for npx package resolution)
 registry.npmjs.org
 
+# --- Claude (required for Claude Code agent) ---
+api.anthropic.com           # Claude API and subscription auth
+console.anthropic.com       # Claude OAuth login flow
+statsigapi.net              # Claude Code telemetry/feature flags
+
+# --- Exact URL rules (METHOD URL) ---
+GET https://raw.githubusercontent.com/anthropics/claude-plugins-official/refs/heads/security/security.json
+
 # --- Uncomment as needed after first-run verification ---
-# api.anthropic.com        # Anthropic LLM API
 # api.openai.com           # OpenAI LLM API
 # github.com               # Company template downloads
 # raw.githubusercontent.com # Company template downloads

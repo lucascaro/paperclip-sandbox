@@ -5,19 +5,16 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 DOCKER_DIR="$PROJECT_DIR/docker"
 
-# Parse args
-# Default to isolated (allowlist proxy) — require explicit flag for less restrictive modes
-MODE="isolated"
+# Parse args — default to sandbox (allowlist), --open for unrestricted
+MODE="sandbox"
 EXTRA_ARGS=()
 for arg in "$@"; do
   case $arg in
-    --open)      MODE="open" ;;
-    --proxy)     MODE="proxy" ;;
+    --open)  MODE="open" ;;
     --help|-h)
-      echo "Usage: $0 [--proxy] [--open]"
-      echo "  (default)     Proxy with allowlist — only config/allowed-hosts.txt permitted"
-      echo "  --proxy       Proxy monitoring, all traffic allowed — inspect at http://localhost:8081"
-      echo "  --open        No proxy, full network access (only after Gates pass)"
+      echo "Usage: $0 [--open]"
+      echo "  (default)     Network allowlist — only config/allowed-hosts.txt permitted"
+      echo "  --open        Full network access (only after security gates pass)"
       exit 0
       ;;
     *)  EXTRA_ARGS+=("$arg") ;;
@@ -37,49 +34,58 @@ if [ ! -f "$PROJECT_DIR/.env" ]; then
   echo ""
 fi
 
-# Ensure data dir exists
-mkdir -p "$PROJECT_DIR/data"
+# Check Claude auth — Keychain token or ANTHROPIC_API_KEY in .env
+if grep -q 'ANTHROPIC_API_KEY=.' "$PROJECT_DIR/.env" 2>/dev/null; then
+  echo "  Claude: API key (via .env)"
+elif KEYCHAIN_TOKEN=$(security find-generic-password -s "paperclip-sandbox-claude-token" -w 2>/dev/null); then
+  export CLAUDE_CODE_OAUTH_TOKEN="$KEYCHAIN_TOKEN"
+  echo "  Claude: subscription token (via macOS Keychain)"
+else
+  echo ""
+  echo "  No Claude authentication found. Run:"
+  echo ""
+  echo "    ./scripts/claude-login.sh"
+  echo ""
+  exit 1
+fi
 
-# Create run marker for post-run audit
-MARKER="/tmp/paperclip-sandbox-marker-$(date +%s)"
-touch "$MARKER"
-echo "Audit marker: $MARKER"
-echo ""
+# Ensure data dir exists and clean stale postgres lock
+mkdir -p "$PROJECT_DIR/data"
+rm -f "$PROJECT_DIR/data/instances/default/db/postmaster.pid"
 
 # Build compose command
 COMPOSE_CMD="docker compose -f $DOCKER_DIR/docker-compose.yml"
 case $MODE in
-  isolated)
+  sandbox)
     COMPOSE_CMD="$COMPOSE_CMD -f $DOCKER_DIR/docker-compose.isolated.yml"
-    echo "=== Starting Paperclip Sandbox (allowlist only) ==="
     echo ""
-    echo "  Allowed hosts (config/allowed-hosts.txt):"
+    echo "=== Paperclip Sandbox (allowlist mode) ==="
+    echo ""
+    echo "  Allowed hosts:"
     while IFS= read -r line; do
-      line="${line%%#*}"   # strip comments
-      line="${line// /}"   # trim
-      [ -n "$line" ] && echo "    - $line"
+      host="${line%%#*}"
+      host="${host// /}"
+      [ -n "$host" ] && echo "    - $host"
     done < "$PROJECT_DIR/config/allowed-hosts.txt"
     echo ""
     echo "  All other outbound traffic is BLOCKED."
-    echo "  Inspect traffic at http://localhost:8081"
-    ;;
-  proxy)
-    COMPOSE_CMD="$COMPOSE_CMD -f $DOCKER_DIR/docker-compose.proxy.yml"
-    echo "=== Starting Paperclip Sandbox (proxy — all traffic allowed) ==="
     ;;
   open)
-    echo "=== Starting Paperclip Sandbox (open — no proxy) ==="
+    echo ""
+    echo "=== Paperclip Sandbox (open mode) ==="
     ;;
 esac
 
 echo ""
 echo "  Mode:      $MODE"
-echo "  Dashboard: http://localhost:3100"
-if [ "$MODE" = "isolated" ] || [ "$MODE" = "proxy" ]; then
+if [ "$MODE" = "sandbox" ]; then
+  echo "  Dashboard: https://localhost:${PAPERCLIP_PORT:-3100}"
   echo "  mitmproxy: http://localhost:8081  (password: p)"
+  echo "  Net logs:  docker compose -f $DOCKER_DIR/docker-compose.yml -f $DOCKER_DIR/docker-compose.isolated.yml logs mitmproxy"
+else
+  echo "  Dashboard: http://localhost:${PAPERCLIP_PORT:-3100}"
 fi
 echo "  Data dir:  $PROJECT_DIR/data/"
-echo "  Marker:    $MARKER"
 echo ""
 
 $COMPOSE_CMD up --build ${EXTRA_ARGS[@]+"${EXTRA_ARGS[@]}"}

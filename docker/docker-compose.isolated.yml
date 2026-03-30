@@ -22,8 +22,12 @@ services:
       - NPM_CONFIG_STRICT_SSL=false
       - NO_UPDATE_NOTIFIER=1
       - GLOBAL_AGENT_HTTP_PROXY=http://mitmproxy:8080
-    ports:
-      - "${PAPERCLIP_PORT:-3100}:3100"
+      - NO_PROXY=localhost,127.0.0.1,host.docker.internal,paperclip
+      - no_proxy=localhost,127.0.0.1,host.docker.internal,paperclip
+      - NODE_OPTIONS=--use-env-proxy
+      - PAPERCLIP_PUBLIC_URL=https://localhost:${PAPERCLIP_PORT:-3100}
+      - BETTER_AUTH_TRUSTED_ORIGINS=https://localhost:${PAPERCLIP_PORT:-3100}
+    ports: !override []
     networks:
       - sandboxnet
 
@@ -50,20 +54,27 @@ services:
       default:
     mem_limit: 256m
 
-  # TCP forwarder: exposes paperclip dashboard to the host.
+  # TLS-terminating reverse proxy: exposes paperclip dashboard over HTTPS.
   # Paperclip stays on the internal network with no internet access.
   gateway:
-    image: alpine/socat:latest
+    image: caddy:2-alpine
     container_name: paperclip-gateway
-    command: TCP-LISTEN:3100,fork,reuseaddr TCP:paperclip:3100
     depends_on:
       - paperclip
     ports:
-      - "${PAPERCLIP_PORT:-3100}:3100"
+      - "${PAPERCLIP_PORT:-3100}:${PAPERCLIP_PORT:-3100}"
+    environment:
+      - PAPERCLIP_PORT=${PAPERCLIP_PORT:-3100}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
     networks:
       sandboxnet:
       default:
-    mem_limit: 32m
+    mem_limit: 64m
+
+volumes:
+  caddy_data:
 
 networks:
   sandboxnet:
