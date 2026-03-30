@@ -19,8 +19,8 @@ cp .env.example .env
 # 3. Add a company template
 ./scripts/add-company.sh paperclipai/companies/default
 
-# 4. Open the dashboard
-open http://localhost:3100
+# 4. Open the dashboard (accept the self-signed cert warning)
+open https://localhost:3100
 ```
 
 ## Project Structure
@@ -55,11 +55,9 @@ Before running with real API keys, follow the incremental trust gates in
 [security/PLAYBOOK.md](security/PLAYBOOK.md):
 
 0. Static scan (no execution)
-1. Docker with no network
-2. Docker with mitmproxy monitoring
-3. Docker with network allowlist
-4. Normal operation with monitoring
-5. Ongoing version-pinned hygiene
+1. Docker with mitmproxy allowlist (default mode)
+2. Normal operation with full network
+3. Ongoing version-pinned hygiene
 
 ## Managing Companies
 

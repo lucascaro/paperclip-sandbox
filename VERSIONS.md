@@ -34,8 +34,9 @@ npm pack paperclipai@2026.325.0 --dry-run 2>&1 | grep integrity
 
 ## Upgrade Policy
 
-1. Check for new versions: `npm outdated companies.sh paperclipai`
-2. Before upgrading, re-run **Gates 0–2** from `security/PLAYBOOK.md`
+1. Check for new versions: `./scripts/check-versions.sh`
+2. Before upgrading, re-run **Gates 0–1** from `security/PLAYBOOK.md`
 3. Update this file with new versions, integrity hashes, and analysis date
-4. Regenerate the security report: `node security/generate-report.js`
-5. Commit the version bump with a reference to the new scan results
+4. Commit the version bump with a reference to the new scan results
+
+See `docs/UPGRADE-CHECKLIST.md` for the full step-by-step process.

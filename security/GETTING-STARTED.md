@@ -140,7 +140,7 @@ Review the output. You are looking for:
 
 **If anything looks alarming, stop.** Share the output with someone who can review it. Do not proceed to the next step until you are comfortable with the scan results.
 
-### Step 5: First run — proxy with allowlist (Gate 1)
+### Step 5: First run — sandbox with allowlist (Gate 1)
 
 The default mode routes all traffic through mitmproxy with a strict allowlist. Only hosts listed in `config/allowed-hosts.txt` are permitted — everything else gets a 403 block response. This lets the app start and function normally while preventing any unexpected outbound connections.
 
@@ -175,14 +175,14 @@ The dashboard is at **https://localhost:3100** (HTTPS with auto-generated TLS ce
 
 The allowlist also supports exact URL rules (`METHOD URL` format) for fine-grained access control. See the file for examples.
 
-Stop the sandbox and run the audit:
+Stop the sandbox and run the audit (the marker path is printed by `start.sh` at startup):
 
 ```bash
 ./scripts/stop.sh
-./security/audit-run.sh /tmp/paperclip-sandbox-marker-XXXXX
+./security/audit-run.sh /tmp/paperclip-sandbox-marker-XXXXX  # use the path from start.sh output
 ```
 
-### Step 6: Normal operation
+### Step 6: Normal operation (Gate 2)
 
 After Gates 0–1 pass clean, you can run with full network access:
 
@@ -231,8 +231,10 @@ To monitor resource usage and network connections:
 1. Stop the sandbox
 2. Back up: `./scripts/backup.sh`
 3. Re-run Gate 0 (static scan) on the new version
-4. Re-run Gate 1 (allowlist mode) to check for new endpoints
-5. Only then start normally
+4. Re-run Gate 1 (sandbox with allowlist) to check for new endpoints
+5. Only then start normally (Gate 2)
+
+See `docs/UPGRADE-CHECKLIST.md` for the full checklist.
 
 ---
 

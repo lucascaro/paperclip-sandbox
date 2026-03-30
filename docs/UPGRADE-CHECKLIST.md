@@ -10,12 +10,12 @@ Or run `./scripts/upgrade.sh` for a guided interactive flow.
 - [ ] Note current pinned versions from `VERSIONS.md`
 - [ ] Stop the sandbox: `./scripts/stop.sh`
 
-## Re-Run Trust Gates
+## Re-Run Trust Gates (see security/PLAYBOOK.md)
 
-- [ ] **Gate 0**: Run `./security/static-scan.sh` on the new version
+- [ ] **Gate 0 — Static scan**: Run `./security/static-scan.sh` on the new version
   - Compare output against previous scan results
   - Flag any new patterns: new endpoints, new env var access, new file writes
-- [ ] **Gate 1**: Start with `./scripts/start.sh` (default: proxy-based allowlist)
+- [ ] **Gate 1 — Sandbox with allowlist**: Start with `./scripts/start.sh`
   - Verify only allowlisted hosts are reachable, check startup isolation self-check passes
   - Inspect all traffic at http://localhost:8081 (password: `p`)
   - Compare against previous traffic patterns
@@ -37,8 +37,5 @@ Or run `./scripts/upgrade.sh` for a guided interactive flow.
   - New version numbers
   - New integrity hashes (`npm view <pkg>@<version> dist.integrity`)
   - Today's date as analysis date
-- [ ] Regenerate reports:
-  - `node security/generate-report.js`
-  - `node security/generate-getting-started.js`
 - [ ] Commit all changes with a reference to the new scan results
 - [ ] Note any new environment variables or configuration changes
