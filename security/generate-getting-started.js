@@ -264,7 +264,7 @@ const doc = new Document({
         spacer(80),
         calloutBox(
           "WHY CAUTION IS WARRANTED",
-          "The core server runtime (@paperclipai/server, 11MB) is open source (github.com/paperclipai/paperclip), but the npm artifact is compiled JS that may diverge from the repository. The npm package installs a persistent background server and database. The GitHub organization is less than 5 weeks old. A full security analysis is available in the companion document. This guide focuses on how to run it safely despite these concerns.",
+          "The core server runtime (@paperclipai/server, 11MB) is open source (https://github.com/paperclipai/paperclip), but the npm artifact is compiled JS that may diverge from the repository. The npm package installs a persistent background server and database. The GitHub organization is less than 5 weeks old. A full security analysis is available in the companion document. This guide focuses on how to run it safely despite these concerns.",
           "FCE4EC",
           RED,
         ),
