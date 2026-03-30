@@ -53,6 +53,11 @@ fi
 mkdir -p "$PROJECT_DIR/data"
 rm -f "$PROJECT_DIR/data/instances/default/db/postmaster.pid"
 
+# Create run marker for post-run audit
+MARKER="/tmp/paperclip-sandbox-marker-$(date +%s)"
+touch "$MARKER"
+echo "  Audit marker: $MARKER"
+
 # Build compose command
 COMPOSE_CMD="docker compose -f $DOCKER_DIR/docker-compose.yml"
 case $MODE in
@@ -64,7 +69,9 @@ case $MODE in
     echo "  Allowed hosts:"
     while IFS= read -r line; do
       host="${line%%#*}"
-      host="${host// /}"
+      # Trim leading and trailing whitespace but preserve internal spaces (e.g., in 'METHOD URL' rules)
+      host="${host#"${host%%[![:space:]]*}"}"
+      host="${host%"${host##*[![:space:]]}"}"
       [ -n "$host" ] && echo "    - $host"
     done < "$PROJECT_DIR/config/allowed-hosts.txt"
     echo ""

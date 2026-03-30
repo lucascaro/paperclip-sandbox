@@ -6,7 +6,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
   && rm -rf /var/lib/apt/lists/*
 
 # Non-root user
-RUN groupadd --system paperclip && useradd --system -g paperclip --create-home paperclip
+RUN groupadd --system --gid 999 paperclip && useradd --system --uid 999 -g paperclip --create-home paperclip
 
 # Working directory
 WORKDIR /app
@@ -28,12 +28,13 @@ USER paperclip
 # ============================================================================
 ARG COMPANIES_SH_VERSION=2026.325.2
 ARG PAPERCLIPAI_VERSION=2026.325.0
+ARG CLAUDE_CODE_VERSION=2.1.87
 
 # Install exact audited versions only
 RUN npm install --no-save \
   "companies.sh@${COMPANIES_SH_VERSION}" \
   "paperclipai@${PAPERCLIPAI_VERSION}" \
-  "@anthropic-ai/claude-code" \
+  "@anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}" \
   && echo "=== Installed versions ===" \
   && npx companies.sh --version 2>/dev/null || true \
   && npm ls paperclipai 2>/dev/null || true \

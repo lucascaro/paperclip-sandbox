@@ -1,6 +1,14 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Platform check — macOS Keychain required
+if ! command -v security &>/dev/null; then
+  echo "ERROR: This script requires macOS Keychain ('security' CLI)." >&2
+  echo "On non-macOS platforms, use an API key instead:" >&2
+  echo "  Add ANTHROPIC_API_KEY=sk-ant-... to your .env file." >&2
+  exit 1
+fi
+
 echo "=== Claude Login ==="
 echo ""
 echo "1. In another terminal, run:"
