@@ -54,10 +54,10 @@ The companies.sh ecosystem is a three-layer system, not a simple CLI tool:
 - Runs persistently in the background after first launch
 - Contains adapters for Claude Code, Codex, Cursor, Gemini CLI, and others
 
-### Layer 3: @paperclipai/server (Closed-Source Runtime)
+### Layer 3: @paperclipai/server (Open-Source Runtime)
 
 - 744 files, 11MB unpacked — the actual agent execution engine
-- No publicly available source code
+- Source is public (MIT license) at github.com/paperclipai/paperclip/tree/master/server/src; npm artifact is compiled JS
 - Dependencies include @aws-sdk/client-s3, embedded-postgres, express, ws, sharp, chokidar, open, better-auth
 - Manages agent filesystem access, memory, coordination, and execution
 
