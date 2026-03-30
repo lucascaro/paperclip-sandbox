@@ -6,6 +6,15 @@ set -euo pipefail
 #
 # Outputs a structured evidence bundle (Markdown) to stdout.
 # Pipe to a file or feed directly to the analysis prompt template.
+#
+# Integrates the following OSS security tools (optional — skipped if not installed):
+#   - Trivy:            container/filesystem vulnerability scanner (brew install trivy)
+#   - Grype:            vulnerability scanner with SBOM support (brew install grype)
+#   - Semgrep:          pattern-based SAST scanner (brew install semgrep)
+#   - Gitleaks:         secret scanner for git repos (brew install gitleaks)
+#   - TruffleHog:       secret scanner with credential verification (brew install trufflehog)
+#   - OpenSSF Scorecard: GitHub repo security posture scoring (brew install scorecard)
+#   - Socket CLI:       supply chain attack detection (npm install -g @socketsecurity/cli)
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
@@ -15,7 +24,7 @@ SCAN_DIR="/tmp/paperclip-sandbox-security-analysis"
 # --- Parse pinned versions from VERSIONS.md ---
 parse_version() {
   local pkg="$1"
-  grep "| \`$pkg\`" "$VERSIONS_FILE" | sed 's/.*| `\([^`]*\)` .*/\1/' | head -1
+  grep "| \`$pkg\`" "$VERSIONS_FILE" | sed 's/.*| `[^`]*` | `\([^`]*\)`.*/\1/' | head -1
 }
 
 CLI_VERSION=$(parse_version "companies.sh")
@@ -54,6 +63,23 @@ scan_pattern() {
   echo ""
 }
 
+# --- Helper: check if a tool is available ---
+has_tool() {
+  command -v "$1" &>/dev/null
+}
+
+# --- Helper: print skip message for missing tool ---
+skip_tool() {
+  local install_hint="$1"
+  local description="$2"
+  echo "**Status:** SKIPPED — not installed"
+  echo ""
+  echo "Install with: \`$install_hint\`"
+  echo ""
+  echo "*$description*"
+  echo ""
+}
+
 # ============================================================
 # BEGIN OUTPUT
 # ============================================================
@@ -66,6 +92,30 @@ cat <<EOF
 - Versions file: $VERSIONS_FILE
 
 EOF
+
+# --- Tool availability summary ---
+section "0. Security Tool Inventory"
+
+echo "| Tool | Installed | Purpose |"
+echo "|------|-----------|---------|"
+for tool_entry in \
+  "trivy|brew install trivy|Container/filesystem vulnerability scanner" \
+  "grype|brew install grype|Vulnerability scanner with SBOM support" \
+  "semgrep|brew install semgrep|Pattern-based SAST scanner" \
+  "gitleaks|brew install gitleaks|Secret scanner for git history" \
+  "trufflehog|brew install trufflehog|Secret scanner with credential verification" \
+  "scorecard|brew install scorecard|OpenSSF repo security scoring (requires GITHUB_TOKEN)" \
+  "socket|npm i -g @socketsecurity/cli|Supply chain attack detection"; do
+  tool_name="${tool_entry%%|*}"
+  rest="${tool_entry#*|}"
+  tool_desc="${rest#*|}"
+  if has_tool "$tool_name"; then
+    echo "| \`$tool_name\` | YES | $tool_desc |"
+  else
+    echo "| \`$tool_name\` | NO | $tool_desc |"
+  fi
+done
+echo ""
 
 # --- Section 1: Package Metadata ---
 section "1. Package Versions"
@@ -127,7 +177,7 @@ done
 # Unpack
 mkdir -p companies-sh paperclipai
 tar -xf companies.sh-*.tgz -C companies-sh --strip-components=1 2>/dev/null || true
-tar -xf paperclipai-*.tgz -C paperclipai --strip-components=1 2>/dev/null || true
+tar -xf paperclipai-*.tgz -C paperclipai 2>/dev/null || true
 
 # File counts
 echo "**File counts:**"
@@ -243,8 +293,239 @@ scan_pattern "S3/cloud upload" \
 scan_pattern "Crypto operations" \
   'crypto\.\|createHash\|createCipher\|randomBytes' "$SCAN_DIR/paperclipai"
 
-# --- Section 7: Version diff (if previous report exists) ---
-section "7. Version Changes"
+# ============================================================
+# Section 7: OSS Security Tool Scans
+# ============================================================
+
+section "7. OSS Security Tool Results"
+
+echo "> Tools are run when available. Install missing tools for more comprehensive results."
+echo ""
+
+# -------------------------------------------------------
+# 7.1 Trivy — filesystem vulnerability scan
+# -------------------------------------------------------
+subsection "7.1 Trivy (Vulnerability Scanner)"
+
+if has_tool trivy; then
+  echo "**Status:** INSTALLED ($(command -v trivy))"
+  echo ""
+  echo "#### Filesystem scan: companies.sh"
+  echo ""
+  echo '```'
+  trivy fs --scanners vuln,secret,misconfig --severity HIGH,CRITICAL "$SCAN_DIR/companies-sh" 2>&1 || echo "(trivy scan completed with errors)"
+  echo '```'
+  echo ""
+  echo "#### Filesystem scan: paperclipai"
+  echo ""
+  echo '```'
+  trivy fs --scanners vuln,secret,misconfig --severity HIGH,CRITICAL "$SCAN_DIR/paperclipai" 2>&1 || echo "(trivy scan completed with errors)"
+  echo '```'
+  echo ""
+  if command -v docker &>/dev/null && docker image inspect paperclip-sandbox:latest &>/dev/null 2>&1; then
+    echo "#### Docker image scan: paperclip-sandbox"
+    echo ""
+    echo '```'
+    trivy image --severity HIGH,CRITICAL paperclip-sandbox:latest 2>&1 || echo "(trivy image scan completed with errors)"
+    echo '```'
+  else
+    echo "#### Docker image scan: SKIPPED (image not built yet)"
+  fi
+  echo ""
+else
+  skip_tool "brew install trivy" "Trivy scans npm packages for known CVEs and misconfigurations."
+fi
+
+# -------------------------------------------------------
+# 7.2 Grype — vulnerability scan with SBOM
+# -------------------------------------------------------
+subsection "7.2 Grype (Vulnerability Scanner)"
+
+if has_tool grype; then
+  echo "**Status:** INSTALLED ($(command -v grype))"
+  echo ""
+  echo "#### Filesystem scan: companies.sh"
+  echo ""
+  echo '```'
+  grype dir:"$SCAN_DIR/companies-sh" --only-fixed --add-cpes-if-none 2>&1 || echo "(grype scan completed with errors)"
+  echo '```'
+  echo ""
+  echo "#### Filesystem scan: paperclipai"
+  echo ""
+  echo '```'
+  grype dir:"$SCAN_DIR/paperclipai" --only-fixed --add-cpes-if-none 2>&1 || echo "(grype scan completed with errors)"
+  echo '```'
+  echo ""
+  if has_tool syft; then
+    echo "#### SBOM (Software Bill of Materials)"
+    echo ""
+    echo '```'
+    syft dir:"$SCAN_DIR/paperclipai" -o table 2>&1 | head -50
+    echo '```'
+    echo ""
+    echo "(Full SBOM saved to $SCAN_DIR/sbom-paperclipai.json)"
+    syft dir:"$SCAN_DIR/paperclipai" -o spdx-json > "$SCAN_DIR/sbom-paperclipai.json" 2>/dev/null || true
+  fi
+  echo ""
+else
+  skip_tool "brew install grype" "Grype scans filesystem and container images for known vulnerabilities, with SBOM generation via Syft."
+fi
+
+# -------------------------------------------------------
+# 7.3 Semgrep — SAST (Static Application Security Testing)
+# -------------------------------------------------------
+subsection "7.3 Semgrep (SAST Scanner)"
+
+if has_tool semgrep; then
+  echo "**Status:** INSTALLED ($(command -v semgrep))"
+  echo ""
+  echo "#### companies.sh — security audit rules"
+  echo ""
+  echo '```'
+  semgrep scan --config auto --config "p/javascript" --config "p/nodejs" \
+    --severity ERROR --severity WARNING \
+    --no-git-ignore --quiet \
+    "$SCAN_DIR/companies-sh" 2>&1 || echo "(semgrep scan completed with errors)"
+  echo '```'
+  echo ""
+  echo "#### paperclipai — security audit rules"
+  echo ""
+  echo '```'
+  semgrep scan --config auto --config "p/javascript" --config "p/nodejs" \
+    --severity ERROR --severity WARNING \
+    --no-git-ignore --quiet \
+    "$SCAN_DIR/paperclipai" 2>&1 || echo "(semgrep scan completed with errors)"
+  echo '```'
+  echo ""
+  echo "#### Supply chain risk patterns"
+  echo ""
+  echo '```'
+  semgrep scan --config "p/supply-chain" \
+    --no-git-ignore --quiet \
+    "$SCAN_DIR/paperclipai" 2>&1 || echo "(no supply-chain rules matched or scan completed with errors)"
+  echo '```'
+  echo ""
+else
+  skip_tool "brew install semgrep" "Semgrep performs pattern-based static analysis to find security issues, code injection, and dangerous API usage."
+fi
+
+# -------------------------------------------------------
+# 7.4 Gitleaks — secret scanning
+# -------------------------------------------------------
+subsection "7.4 Gitleaks (Secret Scanner)"
+
+if has_tool gitleaks; then
+  echo "**Status:** INSTALLED ($(command -v gitleaks))"
+  echo ""
+  echo "#### Scanning downloaded packages for secrets"
+  echo ""
+  echo '```'
+  gitleaks detect --source "$SCAN_DIR/companies-sh" --no-git --verbose 2>&1 || true
+  echo ""
+  gitleaks detect --source "$SCAN_DIR/paperclipai" --no-git --verbose 2>&1 || true
+  echo '```'
+  echo ""
+  UPSTREAM_DIR="$SCAN_DIR/paperclip-upstream"
+  if [ -d "$UPSTREAM_DIR" ]; then
+    echo "#### Scanning upstream git history"
+    echo ""
+    echo '```'
+    gitleaks detect --source "$UPSTREAM_DIR" --verbose 2>&1 || true
+    echo '```'
+  else
+    echo "#### Upstream git history: SKIPPED"
+    echo ""
+    echo "Clone the upstream repo to scan git history:"
+    echo "\`git clone --depth=50 https://github.com/paperclipai/paperclip.git $UPSTREAM_DIR\`"
+  fi
+  echo ""
+else
+  skip_tool "brew install gitleaks" "Gitleaks scans for hardcoded secrets, API keys, and credentials in source code and git history."
+fi
+
+# -------------------------------------------------------
+# 7.5 TruffleHog — secret scanning with verification
+# -------------------------------------------------------
+subsection "7.5 TruffleHog (Secret Scanner with Verification)"
+
+if has_tool trufflehog; then
+  echo "**Status:** INSTALLED ($(command -v trufflehog))"
+  echo ""
+  echo "#### Scanning downloaded packages"
+  echo ""
+  echo '```'
+  trufflehog filesystem --directory "$SCAN_DIR/companies-sh" --no-update 2>&1 || true
+  echo ""
+  trufflehog filesystem --directory "$SCAN_DIR/paperclipai" --no-update 2>&1 || true
+  echo '```'
+  echo ""
+  echo "#### Scanning upstream GitHub repo"
+  echo ""
+  echo '```'
+  trufflehog github --repo https://github.com/paperclipai/paperclip --no-update 2>&1 || true
+  echo '```'
+  echo ""
+else
+  skip_tool "brew install trufflehog" "TruffleHog scans for secrets and verifies whether discovered credentials are still active."
+fi
+
+# -------------------------------------------------------
+# 7.6 OpenSSF Scorecard — repo security posture
+# -------------------------------------------------------
+subsection "7.6 OpenSSF Scorecard (Repo Security Posture)"
+
+if has_tool scorecard && [ -n "${GITHUB_TOKEN:-}" ]; then
+  echo "**Status:** INSTALLED ($(command -v scorecard))"
+  echo ""
+  echo "#### github.com/paperclipai/paperclip"
+  echo ""
+  echo '```'
+  scorecard --repo=github.com/paperclipai/paperclip --format=default 2>&1 || echo "(scorecard completed with errors)"
+  echo '```'
+  echo ""
+  echo "#### Detailed check breakdown"
+  echo ""
+  echo '```'
+  scorecard --repo=github.com/paperclipai/paperclip \
+    --checks=Binary-Artifacts,Branch-Protection,Code-Review,Dangerous-Workflow,Dependency-Update-Tool,Maintained,Pinned-Dependencies,SAST,Security-Policy,Signed-Releases,Token-Permissions,Vulnerabilities \
+    --format=default 2>&1 || echo "(detailed scorecard completed with errors)"
+  echo '```'
+  echo ""
+elif has_tool scorecard; then
+  echo "**Status:** SKIPPED — \`GITHUB_TOKEN\` not set (required to avoid rate limiting)"
+  echo ""
+  echo "Run with: \`GITHUB_TOKEN=ghp_... ./security/analyze.sh\`"
+  echo ""
+else
+  skip_tool "brew install scorecard" "OpenSSF Scorecard evaluates GitHub repos on security practices: branch protection, signed releases, CI, dependency management, and more."
+fi
+
+# -------------------------------------------------------
+# 7.7 Socket CLI — supply chain attack detection
+# -------------------------------------------------------
+subsection "7.7 Socket CLI (Supply Chain Attack Detection)"
+
+if has_tool socket; then
+  echo "**Status:** INSTALLED ($(command -v socket))"
+  echo ""
+  echo "#### Scanning companies.sh"
+  echo ""
+  echo '```'
+  socket npm info "companies.sh@$CLI_VERSION" 2>&1 || echo "(socket scan completed with errors)"
+  echo '```'
+  echo ""
+  echo "#### Scanning paperclipai"
+  echo ""
+  echo '```'
+  socket npm info "paperclipai@$SERVER_VERSION" 2>&1 || echo "(socket scan completed with errors)"
+  echo '```'
+  echo ""
+else
+  skip_tool "npm install -g @socketsecurity/cli" "Socket detects supply chain attacks: install scripts, obfuscated code, network access, shell exec in dependencies, typosquatting, and more."
+fi
+
+# --- Section 8: Version diff (if previous report exists) ---
+section "8. Version Changes"
 
 PREV_REPORT="$REPO_DIR/security/SECURITY-ANALYSIS.md"
 if [ -f "$PREV_REPORT" ]; then
@@ -263,8 +544,8 @@ else
 fi
 echo ""
 
-# --- Section 8: Integrity Verification ---
-section "8. Integrity Hashes"
+# --- Section 9: Integrity Verification ---
+section "9. Integrity Hashes"
 
 echo "| Package | SHA-512 |"
 echo "|---------|---------|"
@@ -276,7 +557,7 @@ done
 echo ""
 
 # --- Cleanup note ---
-section "9. Artifacts"
+section "10. Artifacts"
 
 echo "Scan artifacts are in: $SCAN_DIR"
 echo "Clean up with: \`rm -rf $SCAN_DIR\`"

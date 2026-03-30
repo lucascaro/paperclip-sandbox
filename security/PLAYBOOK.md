@@ -56,13 +56,29 @@ Each gate is a checkpoint. **Do not proceed to the next gate unless the current 
 
 ### Gate 0: Static Analysis (no execution)
 
-**Risk: zero.** Downloads packages as tarballs, unpacks, and greps — never runs them.
+**Risk: zero.** Downloads packages as tarballs, unpacks, and scans with OSS tools + grep — never runs them.
 
 ```bash
+# Quick scan (Trivy, Semgrep, Gitleaks, Socket + grep patterns)
 ./security/static-scan.sh
+
+# Full analysis (all 7 tools + evidence bundle)
+./security/analyze.sh > /tmp/security-evidence-$(date +%Y%m%d).md
 ```
 
-**What it checks:**
+**OSS tools used (optional — install for better coverage):**
+
+| Tool | Install | What It Catches |
+|------|---------|-----------------|
+| Trivy | `brew install trivy` | CVEs in npm deps, hardcoded secrets, Dockerfile misconfigs |
+| Semgrep | `brew install semgrep` | Code injection, dangerous APIs, security anti-patterns |
+| Gitleaks | `brew install gitleaks` | Hardcoded secrets in source and git history |
+| TruffleHog | `brew install trufflehog` | Secrets + verifies if credentials are still active |
+| Grype | `brew install grype` | Vulnerabilities with SBOM generation (via Syft) |
+| OpenSSF Scorecard | `brew install scorecard` | Repo security posture (branch protection, CI, signed releases) |
+| Socket CLI | `npm i -g @socketsecurity/cli` | Install scripts, obfuscated code, typosquatting |
+
+**What it checks (grep fallback, always runs):**
 - Reads of sensitive paths (`.ssh`, `.aws`, `.gnupg`, keychains)
 - `eval()` or `Function()` with dynamic input
 - Child process spawning (`exec`, `spawn`, `fork`)
@@ -73,11 +89,14 @@ Each gate is a checkpoint. **Do not proceed to the next gate unless the current 
 - Environment variable access
 
 **Pass criteria:**
+- No HIGH/CRITICAL CVEs without mitigations (Trivy/Grype)
+- No leaked secrets (Gitleaks/TruffleHog)
+- No supply chain attack signals (Socket)
 - No reads of `~/.ssh`, `~/.aws`, or keychain paths
 - No calls to unknown endpoints (only `api.anthropic.com`, `api.openai.com`, `registry.npmjs.org`)
 - No `eval()` with user/external input
 
-**Stop if:** you see sensitive path access, arbitrary eval, or outbound calls to unrecognized hosts.
+**Stop if:** you see active leaked credentials, HIGH/CRITICAL CVEs in reachable code paths, supply chain attack signals, sensitive path access, arbitrary eval, or outbound calls to unrecognized hosts.
 
 ---
 
@@ -278,8 +297,10 @@ cat ~/.config/companies.sh/telemetry.json 2>/dev/null
 | File | Purpose |
 |------|---------|
 | `PLAYBOOK.md` | This document |
-| `static-scan.sh` | Gate 0 — download and grep packages without executing |
+| `static-scan.sh` | Gate 0 — quick scan with OSS tools (Trivy, Semgrep, Gitleaks, Socket) + grep patterns |
+| `analyze.sh` | Full analysis — all 7 OSS tools + evidence bundle generation |
 | `run-sandboxed.sh` | Gates 1-4 — Docker wrapper with network/proxy modes |
 | `audit-run.sh` | Post-run audit checking for files, processes, ports, telemetry |
+| `SECURITY-ANALYSIS.md` | Security analysis report with tool results and risk assessment |
 | `../sandbox.sb` | macOS `sandbox-exec` profile for Gate 3 |
 | `../Dockerfile.sandbox` | Hardened Docker container definition |

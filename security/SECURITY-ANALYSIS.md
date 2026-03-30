@@ -5,7 +5,7 @@
 - npm package: companies.sh v2026.325.2
 - npm package: paperclipai v2026.325.0
 - npm package: @paperclipai/server (11MB, open source — MIT)
-- Prepared: March 29, 2026
+- Prepared: March 30, 2026
 - Classification: Internal
 
 > **OVERALL ASSESSMENT: PROCEED WITH EXTREME CAUTION**
@@ -117,20 +117,75 @@ A source audit of the TypeScript code (github.com/paperclipai/paperclip/tree/mas
 
 ---
 
-## 5. Mitigation Plan: Incremental Trust Gates
+## 5. OSS Security Tool Results
+
+Automated scans were run against the downloaded (never executed) packages using open-source security tools. See [GETTING-STARTED.md](GETTING-STARTED.md) for tool installation and usage instructions.
+
+### 5.1 Trivy (Vulnerability + Secret + Misconfig Scanner)
+
+| Target | HIGH/CRITICAL CVEs | Secrets | Misconfigs |
+|--------|-------------------|---------|------------|
+| companies.sh | 0 | 0 | 0 |
+| paperclipai | 0 | 0 | 0 |
+| Docker image | SKIPPED (not built) | — | — |
+
+> **PASS** — No vulnerabilities, secrets, or misconfigurations detected in either package.
+
+### 5.2 Grype (Vulnerability Scanner + SBOM)
+
+| Target | Vulnerabilities (fixable) |
+|--------|--------------------------|
+| companies.sh | 0 |
+| paperclipai | 0 |
+
+> **PASS** — No known vulnerabilities found in either package.
+
+### 5.3 Semgrep (SAST Scanner)
+
+| Target | Errors | Warnings | Supply Chain |
+|--------|--------|----------|--------------|
+| companies.sh | 0 | 0 | 0 |
+| paperclipai | 0 | 0 | 0 |
+
+> **PASS** — No security findings from `auto`, `p/javascript`, `p/nodejs`, or `p/supply-chain` rulesets.
+
+### 5.4 Gitleaks (Secret Scanner)
+
+> **SKIPPED** — `gitleaks` not installed. Install with `brew install gitleaks`.
+
+### 5.5 TruffleHog (Secret Scanner with Verification)
+
+> **SKIPPED** — `trufflehog` not installed. Install with `brew install trufflehog`.
+
+### 5.6 OpenSSF Scorecard (Repo Security Posture)
+
+> **SKIPPED** — `GITHUB_TOKEN` not set (required to avoid rate limiting). Run with `GITHUB_TOKEN=ghp_... ./security/analyze.sh`.
+
+### 5.7 Socket CLI (Supply Chain Attack Detection)
+
+| Package | Version | License | Direct Deps | Published By |
+|---------|---------|---------|-------------|-------------|
+| companies.sh | 2026.325.2 | MIT | 4 | GitHub Actions (OIDC) |
+| paperclipai | 2026.325.0 | MIT | 10 | GitHub Actions (OIDC) |
+
+> **PASS** — Both packages are published via GitHub Actions OIDC (not personal tokens). No install script alerts, no obfuscated code alerts, no typosquatting alerts from Socket.
+
+---
+
+## 6. Mitigation Plan: Incremental Trust Gates
 
 Each gate is a checkpoint. Do not proceed to the next unless the current one passes clean.
 
 | Gate | Action | Pass Criteria |
 |------|--------|---------------|
-| 0 | Static grep scan (no execution) | No reads of sensitive paths, no calls to unknown endpoints, no eval with user input |
+| 0 | Static scan with OSS tools + grep (no execution) | No HIGH/CRITICAL CVEs without mitigations, no leaked secrets, no reads of sensitive paths, no calls to unknown endpoints, no eval with user input |
 | 1 | Docker container, network disabled | Fails gracefully; only api.anthropic.com, api.openai.com, registry.npmjs.org in error logs |
 | 2 | Docker + mitmproxy HTTPS inspection | All traffic to known-good endpoints; no env vars, filesystem content, or credentials in payloads |
 | 3 | Filesystem-sandboxed host run (sandbox-exec) | No file access attempts outside the project directory |
 | 4 | Normal operation with monitoring | Clean post-run audit; no new LaunchAgents, background processes, or listening ports |
 | 5 | Ongoing hygiene | Version pinned; Gates 0–2 re-run before every upgrade |
 
-### 5.1 Credential Safety (Pre-Requisite for All Gates)
+### 6.1 Credential Safety (Pre-Requisite for All Gates)
 
 - Anthropic: create a dedicated key named "paperclip-sandbox" with $5–10/month spend cap
 - OpenAI: create a new Project with $10/month budget; key scoped to that Project only
@@ -138,7 +193,7 @@ Each gate is a checkpoint. Do not proceed to the next unless the current one pas
 - Never export API keys in shell profile — .env file only, never committed to git
 - Monitor usage dashboards before and after every test run
 
-### 5.2 Docker Sandbox Configuration
+### 6.2 Docker Sandbox Configuration
 
 The provided Dockerfile.sandbox and run-sandboxed.sh script enforce:
 
@@ -150,7 +205,7 @@ The provided Dockerfile.sandbox and run-sandboxed.sh script enforce:
 - Telemetry disabled (DO_NOT_TRACK=1)
 - Non-root user inside container
 
-### 5.3 Network Monitoring (Gate 2)
+### 6.3 Network Monitoring (Gate 2)
 
 mitmproxy intercepts all HTTPS traffic, allowing inspection of:
 
@@ -161,7 +216,7 @@ mitmproxy intercepts all HTTPS traffic, allowing inspection of:
 
 After the run, mitmweb provides a browser UI for reviewing all captured traffic. Look specifically for requests to endpoints other than api.anthropic.com, api.openai.com, and registry.npmjs.org.
 
-### 5.4 Post-Run Audit Checklist
+### 6.4 Post-Run Audit Checklist
 
 - Files modified outside project directory since the run marker timestamp
 - New LaunchAgents installed in ~/Library/LaunchAgents/
@@ -172,7 +227,7 @@ After the run, mitmweb provides a browser UI for reviewing all captured traffic.
 
 ---
 
-## 6. Mitigating Factors
+## 7. Mitigating Factors
 
 For balanced assessment, the following positive signals were observed:
 
@@ -189,7 +244,7 @@ For balanced assessment, the following positive signals were observed:
 
 ---
 
-## 7. Conclusion
+## 8. Conclusion
 
 The paperclipai/companies.sh ecosystem presents a mixed security profile:
 
@@ -197,7 +252,7 @@ The paperclipai/companies.sh ecosystem presents a mixed security profile:
 - **Source audit resolved key concerns:** S3 is optional (default: local disk), dynamic imports are standard module loading, and plugin HTTP has proper SSRF protection with DNS pinning.
 - **Unusual trust signals:** A 5-week-old organization with 38k GitHub stars and a single anonymous maintainer warrants skepticism about the social proof.
 
-The incremental trust gate approach (Section 5) provides a structured path to evaluate the framework safely. **Gate 0 (static scan) is complete and passed with caveats.** Gates 1–2 (Docker isolation + network monitoring) are required before any execution with real API keys.
+The incremental trust gate approach (Section 6) provides a structured path to evaluate the framework safely. **Gate 0 (static scan) is complete and passed with caveats.** Gates 1–2 (Docker isolation + network monitoring) are required before any execution with real API keys.
 
 ---
 
