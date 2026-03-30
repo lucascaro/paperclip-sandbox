@@ -84,12 +84,15 @@ class AllowlistAddon:
             if method == rule_method and url == rule_url:
                 return
 
-        ctx.log.warn(f"BLOCKED: {flow.request.method} {flow.request.pretty_url} (not in allowlist)")
+        # Strip query/fragment to avoid logging sensitive params (OAuth codes, tokens)
+        safe_url = urlunparse((
+            parsed.scheme, parsed.netloc, parsed.path, "", "", "",
+        ))
+        ctx.log.warn(f"BLOCKED: {flow.request.method} {safe_url} (not in allowlist)")
         flow.response = http.Response.make(
             403,
-            f"Blocked by allowlist: {flow.request.method} {flow.request.pretty_url} is not permitted.\n"
-            f"To allow this request, either add host '{host}' or an exact rule "
-            f"'{flow.request.method} {flow.request.pretty_url}' to config/allowed-hosts.txt and restart.\n",
+            f"Blocked by allowlist: {flow.request.method} {safe_url} is not permitted.\n"
+            f"To allow this request, add host '{host}' to config/allowed-hosts.txt and restart.\n",
             {"Content-Type": "text/plain"},
         )
 
