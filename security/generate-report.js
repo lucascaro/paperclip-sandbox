@@ -300,7 +300,7 @@ const doc = new Document({
         new Paragraph({
           alignment: AlignmentType.CENTER,
           spacing: { after: 80 },
-          children: [new TextRun({ text: "npm package: @paperclipai/server (11MB, closed source)", size: 22, font: "Arial", color: "666666" })],
+          children: [new TextRun({ text: "npm package: @paperclipai/server (11MB, source at github.com/paperclipai/paperclip)", size: 22, font: "Arial", color: "666666" })],
         }),
         spacer(600),
         new Paragraph({
@@ -316,7 +316,7 @@ const doc = new Document({
         spacer(1200),
         calloutBox(
           "OVERALL ASSESSMENT: PROCEED WITH EXTREME CAUTION",
-          "This package installs a persistent background server, a local database, and has unauditable closed-source components. Static analysis found no direct credential theft, but dynamic import capabilities and S3 upload infrastructure mean runtime behavior cannot be fully predicted from code alone. Docker isolation and network monitoring are required before any execution.",
+          "This package installs a persistent background server, a local database, and a large compiled runtime. The server source is public (github.com/paperclipai/paperclip), but the npm artifact is compiled JS that may diverge from source. Static analysis found no direct credential theft, but dynamic import capabilities and S3 upload infrastructure mean runtime behavior cannot be fully predicted from code alone. Docker isolation and network monitoring are required before any execution.",
           "FCE4EC",
           RED_HIGH,
         ),
@@ -362,7 +362,7 @@ const doc = new Document({
         heading3("Key Findings"),
         bulletRuns([bold("No direct credential theft detected"), normal(" \u2014 no reads of ~/.ssh, ~/.aws, ~/.gnupg, or keychain paths in either package")]),
         bulletRuns([bold("Persistent background server"), normal(" \u2014 the package silently starts a detached Node.js server on port 3100 that survives after the CLI exits")]),
-        bulletRuns([bold("Closed-source core"), normal(" \u2014 @paperclipai/server (11MB, 744 files) has no public source code; runtime behavior is unauditable")]),
+        bulletRuns([bold("Large compiled core"), normal(" \u2014 @paperclipai/server (11MB, 744 files) has public source at github.com/paperclipai/paperclip, but the npm artifact is compiled JS that may diverge from the repository")]),
         bulletRuns([bold("Dynamic code loading"), normal(" \u2014 new Function() constructor enables arbitrary module imports at runtime, defeating static analysis")]),
         bulletRuns([bold("S3 upload infrastructure"), normal(" \u2014 full AWS S3 client with a default bucket named \"paperclip\"; data exfiltration capability exists")]),
         bulletRuns([bold("Young organization"), normal(" \u2014 the entire paperclipai GitHub org is < 5 weeks old with 38,000 stars in 27 days from a single maintainer")]),
@@ -398,9 +398,9 @@ const doc = new Document({
         bullet("Contains adapters for Claude Code, Codex, Cursor, Gemini CLI, and others"),
 
         spacer(60),
-        heading3("Layer 3: @paperclipai/server (Closed-Source Runtime)"),
+        heading3("Layer 3: @paperclipai/server (Open-Source Runtime)"),
         bullet("744 files, 11MB unpacked \u2014 the actual agent execution engine"),
-        bullet("No publicly available source code"),
+        bullet("Source code is public at github.com/paperclipai/paperclip (server/ directory); npm artifact is compiled JS"),
         bullet("Dependencies include @aws-sdk/client-s3, embedded-postgres, express, ws, sharp, chokidar, open, better-auth"),
         bullet("Manages agent filesystem access, memory, coordination, and execution"),
 
@@ -417,13 +417,13 @@ const doc = new Document({
           rows: [
             riskRow("Risk", "Severity", "Detail", true),
             riskRow("Persistent background server", "HIGH", "Running npx companies.sh add silently starts a detached Node.js server on port 3100 (detached: true, child.unref()). It survives after the CLI exits. No explicit \"install a server\" prompt is shown."),
-            riskRow("Unauditable server core", "HIGH", "@paperclipai/server (11MB compiled JS) has no public source. You cannot verify what it does at runtime."),
+            riskRow("Large compiled server core", "MEDIUM", "@paperclipai/server (11MB compiled JS) — source is public at github.com/paperclipai/paperclip, but npm artifact is compiled and may diverge from repository source."),
             riskRow("Supply chain attack surface", "HIGH", "20+ dependencies including @aws-sdk/client-s3 (S3 uploads), embedded-postgres (database), open (browser launch), sharp (native binary), chokidar (filesystem watcher)."),
             riskRow("Dynamic code loading", "HIGH", "new Function(\"specifier\", \"return import(specifier)\") in paperclipai enables loading arbitrary modules at runtime, defeating static analysis."),
             riskRow("S3 upload capability", "HIGH", "Full S3 configuration with default bucket named \"paperclip\". Infrastructure for data exfiltration exists even if not currently active."),
             riskRow("Suspicious social proof", "MEDIUM", "Entire org created 2026-02-27. Main repo: 38k stars in 27 days, single maintainer (cryppadotta, protonmail). Star inflation at this velocity is a known social engineering pattern."),
             riskRow("Telemetry without consent", "MEDIUM", "Writes UUID to ~/.config/companies.sh/telemetry.json and POSTs to AWS Lambda on first run. Opt-out via env var, not opt-in."),
-            riskRow("Agent filesystem access", "MEDIUM", "Agents get $AGENT_HOME with read/write. chokidar watches broadly. Scope depends on unauditable server sandbox."),
+            riskRow("Agent filesystem access", "MEDIUM", "Agents get $AGENT_HOME with read/write. chokidar watches broadly. Scope depends on server sandbox (source is public but compiled artifact needs verification)."),
             riskRow("Template injection risk", "MEDIUM", "Community PRs to the template registry (46 forks, 6 open issues) could inject malicious agent configurations."),
             riskRow("Generic fetch(url)", "MEDIUM", "paperclipai contains fetch() calls with variable URLs \u2014 destinations determined at runtime, not just hardcoded API endpoints."),
           ],
@@ -556,7 +556,7 @@ const doc = new Document({
         spacer(100),
         calloutBox(
           "Important Caveat",
-          "Agent instruction clauses like \"never exfiltrate secrets\" are LLM prompts, not access controls. They can be overridden by prompt injection or ignored by the underlying tool framework. The actual security boundary is what the server code permits, and that code is closed-source.",
+          "Agent instruction clauses like \"never exfiltrate secrets\" are LLM prompts, not access controls. They can be overridden by prompt injection or ignored by the underlying tool framework. The actual security boundary is what the server code permits. While the source is public, the compiled npm artifact should still be verified against the repository.",
           "FFF3CD",
           "FFCC02",
         ),
@@ -568,7 +568,7 @@ const doc = new Document({
         para("The paperclipai/companies.sh ecosystem presents a mixed security profile:"),
         spacer(60),
         bulletRuns([bold("No smoking gun: "), normal("Static analysis found no direct reads of sensitive credentials, SSH keys, or browser data.")]),
-        bulletRuns([bold("Cannot be fully cleared: "), normal("Dynamic code loading (new Function), generic fetch with variable URLs, and a closed-source 11MB server core mean runtime behavior is unpredictable from static analysis alone.")]),
+        bulletRuns([bold("Cannot be fully cleared: "), normal("Dynamic code loading (new Function), generic fetch with variable URLs, and an 11MB compiled server core (source is public, but npm artifact may diverge) mean runtime behavior is unpredictable from static analysis alone.")]),
         bulletRuns([bold("Unusual trust signals: "), normal("A 5-week-old organization with 38k GitHub stars and a single anonymous maintainer warrants skepticism about the social proof.")]),
         spacer(100),
         para([

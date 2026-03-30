@@ -18,7 +18,7 @@ How to safely evaluate and run `paperclipai/companies.sh` without trusting it.
 | Risk | Severity | Detail |
 |------|----------|--------|
 | Persistent background server | HIGH | Detached Node.js server on :3100 survives after the CLI exits |
-| Unauditable core | HIGH | `@paperclipai/server` (11MB compiled JS) has no public source |
+| Large compiled core | MEDIUM | `@paperclipai/server` (11MB compiled JS) — source is public at github.com/paperclipai/paperclip but npm artifact is compiled and may diverge |
 | Supply chain surface | HIGH | 20+ deps including `@aws-sdk/client-s3`, `embedded-postgres`, `open`, `sharp`, `chokidar` |
 | Suspicious social proof | MEDIUM | Entire org is < 5 weeks old, 38k stars in 27 days, single maintainer (`cryppadotta`, protonmail) |
 | Telemetry without consent | MEDIUM | Opt-out-by-env-var, not opt-in. UUID written to disk regardless |
@@ -28,6 +28,7 @@ How to safely evaluate and run `paperclipai/companies.sh` without trusting it.
 ### What's not terrible
 
 - The CLI layer has clean, readable TypeScript
+- `@paperclipai/server` source is public at github.com/paperclipai/paperclip (though npm artifact is compiled JS)
 - Telemetry respects `DO_NOT_TRACK=1` and `CI=true`
 - npm publishing uses GitHub Actions OIDC (not personal tokens)
 - Agent instructions include "never exfiltrate" clauses (but these are prompts, not access controls)
