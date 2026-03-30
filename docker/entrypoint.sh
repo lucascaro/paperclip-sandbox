@@ -24,6 +24,20 @@ if [ ! -f "$PAPERCLIP_HOME/instances/${PAPERCLIP_INSTANCE_ID:-default}/config.js
   echo ""
 fi
 
+# Network isolation check (runs when proxy is configured)
+if [ -n "${HTTP_PROXY:-}" ]; then
+  echo "--- Network Isolation Check ---"
+  # Try to reach a known external IP directly (Google DNS) — should fail if isolated
+  if curl -sf --connect-timeout 3 --max-time 5 http://1.1.1.1 >/dev/null 2>&1; then
+    echo "  FAIL: Container can reach external IPs directly. Network isolation is broken!"
+    exit 1
+  else
+    echo "  PASS: Direct external IP access blocked"
+  fi
+  echo "---"
+  echo ""
+fi
+
 # Health check
 echo "Running diagnostics..."
 npx paperclipai doctor || true

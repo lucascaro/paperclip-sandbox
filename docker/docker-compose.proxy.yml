@@ -10,13 +10,15 @@ services:
       - HTTP_PROXY=http://mitmproxy:8080
       - HTTPS_PROXY=http://mitmproxy:8080
       - NODE_TLS_REJECT_UNAUTHORIZED=0
+    ports:
+      - "${PAPERCLIP_PORT:-3100}:3100"
     networks:
       - sandboxnet
 
   mitmproxy:
     image: mitmproxy/mitmproxy:latest
     container_name: paperclip-mitmproxy
-    command: mitmweb --web-host 0.0.0.0 --web-port 8081 --listen-port 8080 --ssl-insecure
+    command: mitmweb --web-host 0.0.0.0 --web-port 8081 --listen-port 8080 --ssl-insecure --no-web-open-browser --set web_password=p
     ports:
       - "8081:8081"   # mitmproxy web UI
     networks:

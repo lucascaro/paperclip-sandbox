@@ -1,6 +1,70 @@
-# Override: run with NO network access (Gate 1)
+# Override: first run with proxy-based allowlist (Gate 1)
+# Routes all traffic through mitmproxy, blocks everything except allowed hosts.
+# Allowlist: config/allowed-hosts.txt
 # Usage: docker compose -f docker-compose.yml -f docker-compose.isolated.yml up --build
+#
+# Inspect traffic at http://localhost:8081 (password: p)
+# Blocked requests appear as 403 in the mitmproxy UI.
 services:
   paperclip:
-    network_mode: "none"
-    ports: !override []
+    depends_on:
+      - mitmproxy
+    environment:
+      - HTTP_PROXY=http://mitmproxy:8080
+      - HTTPS_PROXY=http://mitmproxy:8080
+      - http_proxy=http://mitmproxy:8080
+      - https_proxy=http://mitmproxy:8080
+      - npm_config_proxy=http://mitmproxy:8080
+      - npm_config_https_proxy=http://mitmproxy:8080
+      - NODE_TLS_REJECT_UNAUTHORIZED=0
+      - NPM_CONFIG_PREFER_OFFLINE=1
+      - NPM_CONFIG_UPDATE_NOTIFIER=false
+      - NPM_CONFIG_STRICT_SSL=false
+      - NO_UPDATE_NOTIFIER=1
+      - GLOBAL_AGENT_HTTP_PROXY=http://mitmproxy:8080
+    ports:
+      - "${PAPERCLIP_PORT:-3100}:3100"
+    networks:
+      - sandboxnet
+
+  mitmproxy:
+    image: mitmproxy/mitmproxy:latest
+    container_name: paperclip-mitmproxy
+    command: >-
+      mitmweb
+      --web-host 0.0.0.0
+      --web-port 8081
+      --listen-port 8080
+      --ssl-insecure
+      --no-web-open-browser
+      --set web_password=p
+      --scripts /scripts/mitmproxy-allowlist.py
+      --mode regular
+    ports:
+      - "8081:8081"
+    volumes:
+      - ./mitmproxy-allowlist.py:/scripts/mitmproxy-allowlist.py:ro
+      - ../config/allowed-hosts.txt:/config/allowed-hosts.txt:ro
+    networks:
+      sandboxnet:
+      default:
+    mem_limit: 256m
+
+  # TCP forwarder: exposes paperclip dashboard to the host.
+  # Paperclip stays on the internal network with no internet access.
+  gateway:
+    image: alpine/socat:latest
+    container_name: paperclip-gateway
+    command: TCP-LISTEN:3100,fork,reuseaddr TCP:paperclip:3100
+    depends_on:
+      - paperclip
+    ports:
+      - "${PAPERCLIP_PORT:-3100}:3100"
+    networks:
+      sandboxnet:
+      default:
+    mem_limit: 32m
+
+networks:
+  sandboxnet:
+    internal: true

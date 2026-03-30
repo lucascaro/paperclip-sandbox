@@ -36,5 +36,6 @@ services:
     environment:
       - PAPERCLIP_HOME=/data
       - PAPERCLIP_PORT=3100
+      - PAPERCLIP_SERVER_HOST=0.0.0.0
       - DO_NOT_TRACK=1
       - NODE_ENV=production

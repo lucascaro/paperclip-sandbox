@@ -134,22 +134,35 @@ Review the output. You are looking for:
 
 **If anything looks alarming, stop.** Share the output with someone who can review it. Do not proceed to the next step until you are comfortable with the scan results.
 
-### Step 5: First run — Docker with no network (Gate 1)
+### Step 5: First run — proxy with allowlist (Gate 1)
 
-This is the safest possible execution. The container has no internet access, so even if the code is malicious, it cannot exfiltrate data.
+The default mode routes all traffic through mitmproxy with a strict allowlist. Only hosts listed in `config/allowed-hosts.txt` are permitted — everything else gets a 403 block response. This lets the app start and function normally while preventing any unexpected outbound connections.
 
 ```bash
-./scripts/start.sh --isolated
+./scripts/start.sh
 ```
 
-What to expect:
+This starts two containers:
 
-- The container builds and starts Paperclip
-- Onboarding runs automatically
-- Network calls will fail (this is intentional)
-- Check the logs for which endpoints it tried to reach
+- Paperclip server (all traffic routed through the proxy)
+- mitmproxy web UI at http://localhost:8081
 
-**Pass criteria:** Only api.anthropic.com, api.openai.com, and registry.npmjs.org appear in error logs. No unexpected endpoints.
+Open http://localhost:8081 in your browser. You will see every request in real time. Blocked requests appear as 403 responses with a clear message identifying the blocked host.
+
+**What to verify:**
+
+- All traffic goes to hosts in `config/allowed-hosts.txt`
+- No blocked requests to unexpected hosts appear in the mitmproxy UI
+- Request bodies contain only expected data (prompts, template downloads)
+- No environment variables, file contents, or credentials appear in request payloads
+
+**If you see blocked requests to a host you trust**, add it to `config/allowed-hosts.txt` and restart.
+
+**Default allowlist** (`config/allowed-hosts.txt`):
+
+- `registry.npmjs.org` — npm package resolution
+- `api.anthropic.com` / `api.openai.com` — LLM API calls
+- `github.com` / `api.github.com` / `raw.githubusercontent.com` — template downloads
 
 Stop the sandbox and run the audit:
 
@@ -158,34 +171,30 @@ Stop the sandbox and run the audit:
 ./security/audit-run.sh /tmp/paperclip-sandbox-marker-XXXXX
 ```
 
-### Step 6: Monitored run with mitmproxy (Gate 2)
+### Step 6: Monitored run with mitmproxy — all traffic allowed (Gate 2)
 
-Now enable network access, but route all traffic through a proxy that logs every request.
+Once you have verified the allowlist covers all required hosts, you can run with mitmproxy in monitoring-only mode (no blocking) for deeper traffic inspection.
 
 ```bash
 ./scripts/start.sh --proxy
 ```
 
-This starts two containers:
+This starts the same two containers but without the allowlist filter — all traffic is allowed through and logged.
 
-- Paperclip server (all traffic routed through the proxy)
-- mitmproxy web UI at http://localhost:8081
-
-Open http://localhost:8081 in your browser. You will see every HTTPS request in real time — destination, headers, and full request/response bodies.
+Open http://localhost:8081 to inspect full request/response bodies.
 
 **What to verify:**
 
-- All traffic goes to known-good endpoints (api.anthropic.com, api.openai.com, registry.npmjs.org, github.com)
 - Request bodies contain only expected data (prompts, template downloads)
 - No environment variables, file contents, or credentials appear in request payloads
 - No requests to unknown AWS endpoints, S3 buckets, or third-party servers
 
 ### Step 7: Normal operation
 
-After Gates 0–2 pass clean, you can run with network access:
+After Gates 0–2 pass clean, you can run with full network access:
 
 ```bash
-./scripts/start.sh
+./scripts/start.sh --open
 ```
 
 The dashboard is at http://localhost:3100. From here you can:
@@ -282,9 +291,9 @@ The analysis pipeline integrates seven OSS security tools. Each tool catches a d
 
 | Command | What it does |
 |---------|--------------|
-| `./scripts/start.sh` | Start Paperclip in Docker with safety controls |
-| `./scripts/start.sh --isolated` | Start with NO network (Gate 1) |
-| `./scripts/start.sh --proxy` | Start with mitmproxy monitoring (Gate 2) |
+| `./scripts/start.sh` | Start with proxy allowlist — blocks unknown hosts (default, Gate 1) |
+| `./scripts/start.sh --proxy` | Start with mitmproxy monitoring, all traffic allowed (Gate 2) |
+| `./scripts/start.sh --open` | Start with full network access, no proxy (after Gates pass) |
 | `./scripts/stop.sh` | Stop all containers, check for escaped processes |
 | `./scripts/add-company.sh <template>` | Add a company template inside the running container |
 | `./scripts/monitor.sh` | Live resource and network monitoring |

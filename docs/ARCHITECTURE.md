@@ -68,7 +68,7 @@ activation cycles where they wake, check for work, and execute.
 | `PAPERCLIP_HOME` | `~/.paperclip` | Root data directory (we override to `/data`) |
 | `PAPERCLIP_INSTANCE_ID` | `default` | Scopes all data under instances/ |
 | `PAPERCLIP_PORT` | `3100` | Server port |
-| `PAPERCLIP_DEPLOYMENT_MODE` | `local_trusted` | Security model |
+| `PAPERCLIP_DEPLOYMENT_MODE` | `authenticated` | Security model |
 | `DATABASE_URL` | (embedded) | External PostgreSQL URL |
 | `DO_NOT_TRACK` | `0` | Disable telemetry when set to `1` |
 

@@ -1,18 +1,16 @@
 # Network allowlist — only these hosts are permitted for outbound connections.
-# Used by scripts/start.sh to configure iptables inside the container.
 # One host per line. Lines starting with # are comments.
+#
+# Start minimal. Add hosts only after you see them blocked in mitmproxy
+# (http://localhost:8081) and confirm they are expected.
 
-# LLM providers
-api.anthropic.com
-api.openai.com
-
-# npm registry (for runtime plugin installs)
+localhost
+# npm registry (required for npx package resolution)
 registry.npmjs.org
 
-# GitHub (for company template downloads)
-github.com
-raw.githubusercontent.com
-api.github.com
-
-# --- Optional: add additional hosts as needed per company ---
-# Add service endpoints here as your company templates require them.
+# --- Uncomment as needed after first-run verification ---
+# api.anthropic.com        # Anthropic LLM API
+# api.openai.com           # OpenAI LLM API
+# github.com               # Company template downloads
+# raw.githubusercontent.com # Company template downloads
+# api.github.com           # Company template downloads

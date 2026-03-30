@@ -15,8 +15,8 @@ Or run `./scripts/upgrade.sh` for a guided interactive flow.
 - [ ] **Gate 0**: Run `./security/static-scan.sh` on the new version
   - Compare output against previous scan results
   - Flag any new patterns: new endpoints, new env var access, new file writes
-- [ ] **Gate 1**: Start with `./scripts/start.sh --isolated` (no network)
-  - Verify graceful failure, check error logs for new endpoints
+- [ ] **Gate 1**: Start with `./scripts/start.sh` (default: proxy-based allowlist)
+  - Verify only allowlisted hosts are reachable, check startup isolation self-check passes
 - [ ] **Gate 2**: Start with `./scripts/start.sh --proxy`
   - Inspect all traffic at http://localhost:8081
   - Compare against previous traffic patterns

@@ -1,10 +1,12 @@
-FROM node:20-alpine
+FROM node:20-slim
 
 # System deps for embedded-postgres and sharp
-RUN apk add --no-cache bash curl icu-libs libstdc++
+RUN apt-get update && apt-get install -y --no-install-recommends \
+  bash curl libicu-dev libstdc++6 \
+  && rm -rf /var/lib/apt/lists/*
 
 # Non-root user
-RUN addgroup -S paperclip && adduser -S paperclip -G paperclip
+RUN groupadd --system paperclip && useradd --system -g paperclip --create-home paperclip
 
 # Working directory
 WORKDIR /app

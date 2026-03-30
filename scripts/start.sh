@@ -6,18 +6,21 @@ PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 DOCKER_DIR="$PROJECT_DIR/docker"
 
 # Parse args
-MODE="normal"
+# Default to isolated (allowlist proxy) — require explicit flag for less restrictive modes
+MODE="isolated"
+EXTRA_ARGS=()
 for arg in "$@"; do
   case $arg in
-    --isolated)  MODE="isolated" ;;
+    --open)      MODE="open" ;;
     --proxy)     MODE="proxy" ;;
     --help|-h)
-      echo "Usage: $0 [--isolated] [--proxy]"
-      echo "  (default)     Start with network access on port 3100"
-      echo "  --isolated    Start with NO network (Gate 1)"
-      echo "  --proxy       Start with mitmproxy sidecar (Gate 2) — inspect at http://localhost:8081"
+      echo "Usage: $0 [--proxy] [--open]"
+      echo "  (default)     Proxy with allowlist — only config/allowed-hosts.txt permitted"
+      echo "  --proxy       Proxy monitoring, all traffic allowed — inspect at http://localhost:8081"
+      echo "  --open        No proxy, full network access (only after Gates pass)"
       exit 0
       ;;
+    *)  EXTRA_ARGS+=("$arg") ;;
   esac
 done
 
@@ -48,22 +51,35 @@ COMPOSE_CMD="docker compose -f $DOCKER_DIR/docker-compose.yml"
 case $MODE in
   isolated)
     COMPOSE_CMD="$COMPOSE_CMD -f $DOCKER_DIR/docker-compose.isolated.yml"
-    echo "=== Starting Paperclip Sandbox (ISOLATED — no network) ==="
+    echo "=== Starting Paperclip Sandbox (allowlist only) ==="
+    echo ""
+    echo "  Allowed hosts (config/allowed-hosts.txt):"
+    while IFS= read -r line; do
+      line="${line%%#*}"   # strip comments
+      line="${line// /}"   # trim
+      [ -n "$line" ] && echo "    - $line"
+    done < "$PROJECT_DIR/config/allowed-hosts.txt"
+    echo ""
+    echo "  All other outbound traffic is BLOCKED."
+    echo "  Inspect traffic at http://localhost:8081"
     ;;
   proxy)
     COMPOSE_CMD="$COMPOSE_CMD -f $DOCKER_DIR/docker-compose.proxy.yml"
-    echo "=== Starting Paperclip Sandbox (PROXY — mitmproxy on :8081) ==="
+    echo "=== Starting Paperclip Sandbox (proxy — all traffic allowed) ==="
     ;;
-  *)
-    echo "=== Starting Paperclip Sandbox ==="
+  open)
+    echo "=== Starting Paperclip Sandbox (open — no proxy) ==="
     ;;
 esac
 
+echo ""
 echo "  Mode:      $MODE"
 echo "  Dashboard: http://localhost:3100"
-[ "$MODE" = "proxy" ] && echo "  mitmproxy: http://localhost:8081"
+if [ "$MODE" = "isolated" ] || [ "$MODE" = "proxy" ]; then
+  echo "  mitmproxy: http://localhost:8081  (password: p)"
+fi
 echo "  Data dir:  $PROJECT_DIR/data/"
 echo "  Marker:    $MARKER"
 echo ""
 
-$COMPOSE_CMD up --build "$@"
+$COMPOSE_CMD up --build ${EXTRA_ARGS[@]+"${EXTRA_ARGS[@]}"}
