@@ -26,7 +26,7 @@ fi
 
 # Network isolation check
 echo "--- Network Isolation Check ---"
-if curl -sf --connect-timeout 3 --max-time 5 http://1.1.1.1 >/dev/null 2>&1; then
+if curl -sf --noproxy '*' --connect-timeout 3 --max-time 5 http://1.1.1.1 >/dev/null 2>&1; then
   echo "  WARN: Container can reach external IPs directly (open mode or no sandbox)"
 else
   echo "  PASS: Direct external IP access blocked"

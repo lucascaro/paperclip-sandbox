@@ -11,6 +11,7 @@ Any request not matching the allowlist gets a 403 response and is logged.
 
 import logging
 from pathlib import Path
+from urllib.parse import urlparse, urlunparse
 
 from mitmproxy import http, ctx
 
@@ -32,8 +33,18 @@ def load_allowlist(path: str) -> tuple[set[str], list[tuple[str, str]]]:
             if " " in line and line.split()[0].isupper():
                 parts = line.split(None, 1)
                 method = parts[0].upper()
-                url = parts[1].lower()
-                url_rules.append((method, url))
+                raw_url = parts[1]
+                # Normalize scheme + host to lowercase but preserve path case
+                parsed = urlparse(raw_url)
+                normalized = urlunparse((
+                    parsed.scheme.lower(),
+                    parsed.netloc.lower(),
+                    parsed.path,
+                    parsed.params,
+                    parsed.query,
+                    parsed.fragment,
+                ))
+                url_rules.append((method, normalized))
             else:
                 hosts.add(line.lower())
     except FileNotFoundError:
@@ -60,16 +71,28 @@ class AllowlistAddon:
 
         # Check URL-level rules
         method = flow.request.method.upper()
-        url = flow.request.pretty_url.lower()
+        parsed = urlparse(flow.request.pretty_url)
+        url = urlunparse((
+            parsed.scheme.lower(),
+            parsed.netloc.lower(),
+            parsed.path,
+            parsed.params,
+            parsed.query,
+            parsed.fragment,
+        ))
         for rule_method, rule_url in self.url_rules:
             if method == rule_method and url == rule_url:
                 return
 
-        ctx.log.warn(f"BLOCKED: {flow.request.method} {flow.request.pretty_url} (not in allowlist)")
+        # Strip query/fragment to avoid logging sensitive params (OAuth codes, tokens)
+        safe_url = urlunparse((
+            parsed.scheme, parsed.netloc, parsed.path, "", "", "",
+        ))
+        ctx.log.warn(f"BLOCKED: {flow.request.method} {safe_url} (not in allowlist)")
         flow.response = http.Response.make(
             403,
-            f"Blocked by allowlist: {flow.request.method} {host} is not permitted.\n"
-            f"To allow this host, add it to config/allowed-hosts.txt and restart.\n",
+            f"Blocked by allowlist: {flow.request.method} {safe_url} is not permitted.\n"
+            f"To allow this request, add host '{host}' to config/allowed-hosts.txt and restart.\n",
             {"Content-Type": "text/plain"},
         )
 

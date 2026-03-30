@@ -49,9 +49,25 @@ else
   exit 1
 fi
 
-# Ensure data dir exists and clean stale postgres lock
+# Ensure data dir exists
 mkdir -p "$PROJECT_DIR/data"
-rm -f "$PROJECT_DIR/data/instances/default/db/postmaster.pid"
+
+# Clean stale postgres lock only if no sandbox container is currently running
+PID_FILE="$PROJECT_DIR/data/instances/default/db/postmaster.pid"
+if [ -f "$PID_FILE" ]; then
+  if docker compose -f "$DOCKER_DIR/docker-compose.yml" ps --status running 2>/dev/null | grep -q paperclip; then
+    echo "  WARNING: Sandbox container is already running. Stop it first with ./scripts/stop.sh"
+    exit 1
+  else
+    echo "  Removing stale postgres PID file (no running container found)"
+    rm -f "$PID_FILE"
+  fi
+fi
+
+# Create run marker for post-run audit
+MARKER="/tmp/paperclip-sandbox-marker-$(date +%s)"
+touch "$MARKER"
+echo "  Audit marker: $MARKER"
 
 # Build compose command
 COMPOSE_CMD="docker compose -f $DOCKER_DIR/docker-compose.yml"
@@ -64,7 +80,9 @@ case $MODE in
     echo "  Allowed hosts:"
     while IFS= read -r line; do
       host="${line%%#*}"
-      host="${host// /}"
+      # Trim leading and trailing whitespace but preserve internal spaces (e.g., in 'METHOD URL' rules)
+      host="${host#"${host%%[![:space:]]*}"}"
+      host="${host%"${host##*[![:space:]]}"}"
       [ -n "$host" ] && echo "    - $host"
     done < "$PROJECT_DIR/config/allowed-hosts.txt"
     echo ""
