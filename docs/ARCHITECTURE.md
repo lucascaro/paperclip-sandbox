@@ -37,11 +37,33 @@ data/                                    # = PAPERCLIP_HOME
 
 ## Server
 
-- **Runtime**: Node.js 20+
+- **Runtime**: Node.js 22+ (required for `--use-env-proxy` flag)
 - **Database**: Embedded PostgreSQL (auto-starts, finds available port from 5432)
-- **UI**: React dashboard at http://localhost:3100
+- **UI**: React dashboard at https://localhost:3100 (TLS via Caddy gateway)
 - **Health**: `GET /api/health` returns `{"status":"ok"}`
 - **Companies**: `GET /api/companies` lists all companies
+
+## Network Architecture (Sandbox Mode)
+
+Default mode uses three containers on a Docker internal network:
+
+1. **paperclip** — app server, only on `sandboxnet` (internal, no internet)
+2. **mitmproxy** — allowlist-enforcing proxy, bridges `sandboxnet` ↔ `default`
+3. **caddy gateway** — TLS-terminating reverse proxy, publishes port 3100
+
+All outbound traffic from paperclip routes through mitmproxy via `HTTP_PROXY`
+env vars + Node 22's `--use-env-proxy`. Only hosts in `config/allowed-hosts.txt`
+are permitted. The allowlist supports host-level (`api.anthropic.com`) and
+exact URL rules (`GET https://example.com/path`).
+
+## Claude Code Authentication
+
+Claude Code runs inside the container as an agent adapter. Authentication:
+
+1. Run `./scripts/claude-login.sh` — prompts you to paste a token from `npx @anthropic-ai/claude-code setup-token`
+2. Token is stored in macOS Keychain (service: `paperclip-sandbox-claude-token`)
+3. At startup, `start.sh` reads from Keychain and passes via `CLAUDE_CODE_OAUTH_TOKEN` env var
+4. Revoke at claude.ai/settings/claude-code
 
 ## Company Model
 

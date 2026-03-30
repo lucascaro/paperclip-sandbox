@@ -15,6 +15,7 @@ services:
     tmpfs:
       - /tmp:size=200m
       - /app/node_modules/.cache:size=100m
+      - /home/paperclip:size=50m,uid=999,gid=999
 
     # --- Resource limits ---
     mem_limit: 1g
@@ -37,5 +38,9 @@ services:
       - PAPERCLIP_HOME=/data
       - PAPERCLIP_PORT=3100
       - PAPERCLIP_SERVER_HOST=0.0.0.0
+      - PAPERCLIP_PUBLIC_URL=http://localhost:${PAPERCLIP_PORT:-3100}
+      - BETTER_AUTH_TRUSTED_ORIGINS=http://localhost:${PAPERCLIP_PORT:-3100}
+      - ANTHROPIC_API_KEY
+      - CLAUDE_CODE_OAUTH_TOKEN
       - DO_NOT_TRACK=1
       - NODE_ENV=production

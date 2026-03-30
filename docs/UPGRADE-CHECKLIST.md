@@ -17,10 +17,9 @@ Or run `./scripts/upgrade.sh` for a guided interactive flow.
   - Flag any new patterns: new endpoints, new env var access, new file writes
 - [ ] **Gate 1**: Start with `./scripts/start.sh` (default: proxy-based allowlist)
   - Verify only allowlisted hosts are reachable, check startup isolation self-check passes
-- [ ] **Gate 2**: Start with `./scripts/start.sh --proxy`
-  - Inspect all traffic at http://localhost:8081
+  - Inspect all traffic at http://localhost:8081 (password: `p`)
   - Compare against previous traffic patterns
-  - Flag any new outbound destinations
+  - Flag any new outbound destinations or blocked requests
 
 ## Apply Upgrade
 

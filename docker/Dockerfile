@@ -1,4 +1,4 @@
-FROM node:20-slim
+FROM node:22-slim
 
 # System deps for embedded-postgres and sharp
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -15,6 +15,10 @@ RUN chown paperclip:paperclip /app
 # Data directory (bind-mounted from host)
 RUN mkdir -p /data && chown paperclip:paperclip /data
 
+# Fake 'open' command — prints URLs instead of opening a browser
+COPY --chmod=755 open-stub.sh /usr/local/bin/open
+COPY --chmod=755 open-stub.sh /usr/local/bin/xdg-open
+
 USER paperclip
 
 # ============================================================================
@@ -29,6 +33,7 @@ ARG PAPERCLIPAI_VERSION=2026.325.0
 RUN npm install --no-save \
   "companies.sh@${COMPANIES_SH_VERSION}" \
   "paperclipai@${PAPERCLIPAI_VERSION}" \
+  "@anthropic-ai/claude-code" \
   && echo "=== Installed versions ===" \
   && npx companies.sh --version 2>/dev/null || true \
   && npm ls paperclipai 2>/dev/null || true \

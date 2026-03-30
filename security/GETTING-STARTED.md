@@ -30,10 +30,10 @@ Paperclip is an AI agent orchestration platform. It lets you create virtual "com
 |------|---------|
 | Docker | Docker Desktop installed and running. This is the primary isolation boundary. |
 | Git | For cloning the paperclip-sandbox repository. |
-| Node.js | v20+ (for running the static scan script only — not for running Paperclip itself). |
-| API Keys | Anthropic and/or OpenAI accounts for LLM access. You will create scoped, limited keys. |
+| Node.js | v22+ (for running the static scan script only — not for running Paperclip itself). |
+| API Keys | Anthropic API key and/or Claude subscription token for LLM access. See Step 2 below. |
 
-**Optional but recommended:** mitmproxy (`brew install mitmproxy`) for inspecting all HTTPS traffic during Gate 2.
+**Optional but recommended:** Review the mitmproxy web UI at http://localhost:8081 during Gate 1 — mitmproxy runs inside Docker, no local install needed.
 
 ### Security scanning tools (optional, recommended)
 
@@ -73,25 +73,32 @@ cd paperclip-sandbox
 
 This repository contains Docker configuration, security scripts, and safe wrapper scripts. It does NOT contain Paperclip itself — Paperclip is installed inside the Docker container at build time.
 
-### Step 2: Create scoped API keys
+### Step 2: Configure Claude authentication
 
-This is the single most important safety step. Never use your primary development API keys.
+You have two options for Claude authentication. Choose one:
 
-#### Anthropic
+#### Option A: Claude subscription token (recommended)
+
+Use your existing Claude subscription. The token is stored securely in macOS Keychain — never written to disk as plain text.
+
+```bash
+# 1. In a separate terminal, generate a token:
+npx @anthropic-ai/claude-code setup-token
+
+# 2. Run the login script and paste the token when prompted:
+./scripts/claude-login.sh
+```
+
+The token is stored in macOS Keychain (service: `paperclip-sandbox-claude-token`). To revoke it, visit claude.ai/settings/claude-code.
+
+#### Option B: Scoped API key
 
 1. Log in to console.anthropic.com
 2. Create a new Workspace (or use an existing test workspace)
 3. Create a new API key named "paperclip-sandbox"
 4. Set a monthly spend limit of $5–10 on the workspace
 
-#### OpenAI
-
-1. Log in to platform.openai.com
-2. Create a new Project named "paperclip-sandbox"
-3. Set a $10/month budget on the Project
-4. Create an API key scoped to that Project only
-
-#### Other services
+#### Other LLM providers
 
 - Only add if a specific company template requires them. Use test accounts with minimal permissions.
 
@@ -100,14 +107,13 @@ This is the single most important safety step. Never use your primary developmen
 ```bash
 cp .env.example .env
 
-# Edit .env and add your scoped keys:
+# If using Option B (API key), edit .env:
 # ANTHROPIC_API_KEY=sk-ant-...
-# OPENAI_API_KEY=sk-...
 ```
 
 > **NEVER DO THIS**
 >
-> Do not export API keys in your shell profile (e.g., `export OPENAI_API_KEY=...`). Keys should only exist in the .env file, which is gitignored and only passed to the Docker container. Do not commit .env to git.
+> Do not export API keys in your shell profile (e.g., `export ANTHROPIC_API_KEY=...`). Keys should only exist in the .env file (gitignored) or macOS Keychain. Never commit secrets to git or store tokens as plain text on disk.
 
 ### Step 4: Run the static security scan (Gate 0)
 
@@ -142,12 +148,15 @@ The default mode routes all traffic through mitmproxy with a strict allowlist. O
 ./scripts/start.sh
 ```
 
-This starts two containers:
+This starts three containers on a Docker internal network:
 
-- Paperclip server (all traffic routed through the proxy)
-- mitmproxy web UI at http://localhost:8081
+- **paperclip** — app server, only on `sandboxnet` (no direct internet access)
+- **mitmproxy** — allowlist-enforcing proxy, bridges `sandboxnet` ↔ `default` network
+- **caddy gateway** — TLS-terminating reverse proxy, publishes the dashboard over HTTPS
 
-Open http://localhost:8081 in your browser. You will see every request in real time. Blocked requests appear as 403 responses with a clear message identifying the blocked host.
+Open http://localhost:8081 in your browser (password: `p`). You will see every request in real time. Blocked requests appear as 403 responses with a clear message identifying the blocked host.
+
+The dashboard is at **https://localhost:3100** (HTTPS with auto-generated TLS certificate — your browser will show a self-signed cert warning on first visit).
 
 **What to verify:**
 
@@ -160,9 +169,11 @@ Open http://localhost:8081 in your browser. You will see every request in real t
 
 **Default allowlist** (`config/allowed-hosts.txt`):
 
+- `localhost` / `host.docker.internal` — internal communication
 - `registry.npmjs.org` — npm package resolution
-- `api.anthropic.com` / `api.openai.com` — LLM API calls
-- `github.com` / `api.github.com` / `raw.githubusercontent.com` — template downloads
+- `api.anthropic.com` / `console.anthropic.com` / `statsigapi.net` — Claude API and auth
+
+The allowlist also supports exact URL rules (`METHOD URL` format) for fine-grained access control. See the file for examples.
 
 Stop the sandbox and run the audit:
 
@@ -171,33 +182,15 @@ Stop the sandbox and run the audit:
 ./security/audit-run.sh /tmp/paperclip-sandbox-marker-XXXXX
 ```
 
-### Step 6: Monitored run with mitmproxy — all traffic allowed (Gate 2)
+### Step 6: Normal operation
 
-Once you have verified the allowlist covers all required hosts, you can run with mitmproxy in monitoring-only mode (no blocking) for deeper traffic inspection.
-
-```bash
-./scripts/start.sh --proxy
-```
-
-This starts the same two containers but without the allowlist filter — all traffic is allowed through and logged.
-
-Open http://localhost:8081 to inspect full request/response bodies.
-
-**What to verify:**
-
-- Request bodies contain only expected data (prompts, template downloads)
-- No environment variables, file contents, or credentials appear in request payloads
-- No requests to unknown AWS endpoints, S3 buckets, or third-party servers
-
-### Step 7: Normal operation
-
-After Gates 0–2 pass clean, you can run with full network access:
+After Gates 0–1 pass clean, you can run with full network access:
 
 ```bash
 ./scripts/start.sh --open
 ```
 
-The dashboard is at http://localhost:3100. From here you can:
+The dashboard is at http://localhost:3100 (HTTP, no proxy). From here you can:
 
 - Create companies via the UI
 - Add pre-built company templates from the catalog
@@ -222,7 +215,7 @@ To monitor resource usage and network connections:
 ### Always
 
 - Run inside Docker — never `npx paperclipai` or `npx companies.sh` directly on your host
-- Use scoped API keys with spend caps — check provider dashboards after each session
+- Use scoped API keys with spend caps or subscription tokens with budget limits — check provider dashboards after each session
 - Run the post-run audit after stopping the sandbox
 - Back up before upgrades: `./scripts/backup.sh`
 
@@ -238,9 +231,8 @@ To monitor resource usage and network connections:
 1. Stop the sandbox
 2. Back up: `./scripts/backup.sh`
 3. Re-run Gate 0 (static scan) on the new version
-4. Re-run Gate 1 (isolated) to check for new endpoints
-5. Re-run Gate 2 (proxy) to inspect traffic changes
-6. Only then start normally
+4. Re-run Gate 1 (allowlist mode) to check for new endpoints
+5. Only then start normally
 
 ---
 
@@ -292,8 +284,8 @@ The analysis pipeline integrates seven OSS security tools. Each tool catches a d
 | Command | What it does |
 |---------|--------------|
 | `./scripts/start.sh` | Start with proxy allowlist — blocks unknown hosts (default, Gate 1) |
-| `./scripts/start.sh --proxy` | Start with mitmproxy monitoring, all traffic allowed (Gate 2) |
 | `./scripts/start.sh --open` | Start with full network access, no proxy (after Gates pass) |
+| `./scripts/claude-login.sh` | Store Claude subscription token securely in macOS Keychain |
 | `./scripts/stop.sh` | Stop all containers, check for escaped processes |
 | `./scripts/add-company.sh <template>` | Add a company template inside the running container |
 | `./scripts/monitor.sh` | Live resource and network monitoring |
@@ -304,9 +296,9 @@ The analysis pipeline integrates seven OSS security tools. Each tool catches a d
 
 ### Key URLs
 
-- Paperclip Dashboard: http://localhost:3100
-- mitmproxy UI (proxy mode): http://localhost:8081
-- Health check: http://localhost:3100/api/health
+- Paperclip Dashboard: https://localhost:3100 (sandbox mode) or http://localhost:3100 (open mode)
+- mitmproxy UI (sandbox mode): http://localhost:8081 (password: `p`)
+- Health check: https://localhost:3100/api/health
 
 ### Key Files
 
@@ -332,11 +324,16 @@ The analysis pipeline integrates seven OSS security tools. Each tool catches a d
 - Verify API keys are valid and have remaining budget
 - Check container logs: `docker logs paperclip-sandbox`
 
-### Proxy mode shows no traffic
+### Sandbox mode shows no traffic in mitmproxy
 
-- Ensure you used --proxy flag (not just --network)
+- Ensure you are running in default sandbox mode (not `--open`)
 - Check mitmproxy container is running: `docker ps`
-- Open http://localhost:8081 — traffic appears in real time
+- Open http://localhost:8081 (password: `p`) — traffic appears in real time
+
+### Browser shows certificate warning
+
+- This is expected in sandbox mode — Caddy generates a self-signed TLS certificate
+- Accept the certificate to proceed to the dashboard
 
 ### Need to start fresh
 
